@@ -1,0 +1,11 @@
+# Låsta versioner för Windows, macOS, Linux och Android (proot/glibc aarch64).
+# Samma fil överallt. Inget Tesseract, Streamlit eller separat Android-lista.
+flask==3.1.3
+openpyxl==3.1.5
+pymupdf==2.0
+pillow==12.3.0
+numpy==2.5.4
+rapidocr-onnxruntime==1.4.4
+onnxruntime==1.31.0
+opencv-python-headless==5.0.0.93
+pytest==9.1.1

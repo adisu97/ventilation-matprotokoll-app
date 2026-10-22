@@ -1,0 +1,2 @@
+# Samma låsta paket som på datorn och i Windows-ZIP:en.
+-r requirements.txt
