@@ -1,0 +1,20 @@
+Mätprotokoll för ventilation — Windows (ingen installation)
+
+1. Packa upp hela mappen (inte bara .exe-filen).
+2. Dubbelklicka på matprotokoll.exe.
+3. Webbläsaren öppnas på http://127.0.0.1:8501
+
+Om Windows visar SmartScreen / "Windows skyddade din dator":
+  Mer information → Kör ändå
+Inget administratörslösenord behövs. Programmet skriver inget i Program Files.
+
+Andra enheter på samma wifi (Android-surfplatta, iPad):
+  stäng programmet, öppna Kommandotolken i den här mappen och kör:
+    matprotokoll.exe --lan
+  Adressen till datorn skrivs ut, t.ex. http://192.168.1.12:8501
+  iPad kan inte köra programmet själv — öppna bara den adressen i Safari.
+
+Snabbare OCR (samma RapidOCR, färre rutor):
+    matprotokoll.exe
+  och välj "Snabb" på startsidan, eller:
+    matprotokoll.exe --quality fast
