@@ -1,0 +1,105 @@
+name: Test och Windows-ZIP
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publicera GitHub Release med Windows-ZIP
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installera samma requirements
+        run: |
+          python -m pip install -U pip
+          python -m pip install -r requirements.txt
+      - name: Tester
+        run: python -m pytest -q
+      - name: Rumssökning mini-ritning (snabb, RapidOCR)
+        run: |
+          python -m matprotokoll.webapp --extract tests/fixtures/mini_ritning.pdf --json-out linux-mini.json --xlsx-out linux-mini.xlsx --quality fast
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-room-json
+          path: |
+            linux-mini.json
+            linux-mini.xlsx
+
+  windows-portable:
+    runs-on: windows-latest
+    needs: linux
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installera requirements + PyInstaller
+        run: |
+          python -m pip install -U pip
+          python -m pip install -r requirements.txt pyinstaller
+      - name: Bygg onedir
+        run: |
+          pyinstaller --noconfirm --clean packaging/matprotokoll.spec
+          Copy-Item packaging/STARTA.txt dist/matprotokoll/STARTA.txt
+      - name: Zippa portabel mapp
+        run: |
+          Compress-Archive -Path dist/matprotokoll -DestinationPath matprotokoll-windows.zip -Force
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-room-json
+          path: linux-ref
+      - name: Rök — exe extraherar mini-PDF och jämför rum med Linux
+        run: |
+          $exe = Join-Path (Get-Location) "dist/matprotokoll/matprotokoll.exe"
+          $pdf = (Resolve-Path "tests/fixtures/mini_ritning.pdf").Path
+          & $exe --extract $pdf --json-out ((Get-Location).Path + "\win-mini.json") --xlsx-out ((Get-Location).Path + "\win-mini.xlsx") --quality fast
+          python scripts/compare_room_json.py linux-ref/linux-mini.json win-mini.json --min-rooms 2
+      - name: Rök — exe som webb, ladda upp mini-PDF, få Excel
+        run: |
+          $exe = Join-Path (Get-Location) "dist/matprotokoll/matprotokoll.exe"
+          $wd = Split-Path $exe
+          $p = Start-Process -FilePath $exe -WorkingDirectory $wd -ArgumentList "--host","127.0.0.1","--port","8501","--no-browser","--quality","fast" -PassThru
+          try {
+            python scripts/smoke_http.py --base http://127.0.0.1:8501 --pdf tests/fixtures/mini_ritning.pdf --xlsx-out smoke-mini.xlsx
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: matprotokoll-windows
+          path: |
+            matprotokoll-windows.zip
+            win-mini.json
+            win-mini.xlsx
+      - name: Käll-ZIP till Android-bootstrap
+        if: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
+        run: git archive --format=zip --output source.zip HEAD
+      - name: Publicera GitHub Release
+        if: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('portable-{0}', github.sha) }}
+          name: Portabel Windows-app
+          prerelease: ${{ github.ref_type != 'tag' }}
+          files: |
+            matprotokoll-windows.zip
+            android/bootstrap.sh
+            source.zip
+          body: |
+            Packa upp ZIP:en och dubbelklicka på matprotokoll.exe. Ingen installation, inget admin-lösenord.
+            SmartScreen: Mer information → Kör ändå.
+            Android (Termux): curl -fsSL https://github.com/adisu97/ventilation-matprotokoll-app/releases/latest/download/bootstrap.sh | bash
