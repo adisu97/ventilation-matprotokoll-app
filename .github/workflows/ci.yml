@@ -88,6 +88,16 @@ jobs:
       - name: Käll-ZIP till Android-bootstrap
         if: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
         run: git archive --format=zip --output source.zip HEAD
+      - name: Hämta Termux-APK:er som ska följa med releasen
+        if: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p termux-keep
+          base="https://github.com/${{ github.repository }}/releases/latest/download"
+          for f in termux-arm64-v8a.apk termux-universal.apk SHA256SUMS.txt; do
+            curl -fL --retry 3 -o "termux-keep/$f" "$base/$f"
+          done
       - name: Publicera GitHub Release
         if: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
         uses: softprops/action-gh-release@v2
@@ -95,11 +105,23 @@ jobs:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('portable-{0}', github.sha) }}
           name: Portabel Windows-app
           prerelease: ${{ github.ref_type != 'tag' }}
+          # overwrite_files byter bara ut tillgångar med samma filnamn.
+          # Inga andra filer på releasen tas bort.
+          overwrite_files: true
           files: |
             matprotokoll-windows.zip
             android/bootstrap.sh
             source.zip
+            termux-keep/termux-arm64-v8a.apk
+            termux-keep/termux-universal.apk
+            termux-keep/SHA256SUMS.txt
           body: |
             Packa upp ZIP:en och dubbelklicka på matprotokoll.exe. Ingen installation, inget admin-lösenord.
             SmartScreen: Mer information → Kör ändå.
-            Android (Termux): curl -fsSL https://github.com/adisu97/ventilation-matprotokoll-app/releases/latest/download/bootstrap.sh | bash
+            Android: ladda ner https://github.com/adisu97/ventilation-matprotokoll-app/releases/latest/download/termux-arm64-v8a.apk
+            Installera (tillåt installation från webbläsaren), öppna Termux och klistra in:
+            curl -fsSL https://github.com/adisu97/ventilation-matprotokoll-app/releases/latest/download/bootstrap.sh | bash
+            Nästa gång: bash ~/matprotokoll/android/start.sh
+            Termux v0.118.3, oförändrade officiella github-debug-APK:er, licens GPLv3.
+            Källkod: https://github.com/termux/termux-app
+            Kontrollsummor: SHA256SUMS.txt

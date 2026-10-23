@@ -4,7 +4,9 @@
 set -euo pipefail
 
 if ! command -v pkg >/dev/null 2>&1 || [[ -z "${PREFIX:-}" ]]; then
-  echo "Öppna Termux (APK från F-Droid eller GitHub) och kör skriptet där."
+  echo "Öppna Termux och kör skriptet där."
+  echo "APK: https://github.com/adisu97/ventilation-matprotokoll-app/releases/latest/download/termux-arm64-v8a.apk"
+  echo "F-Droid är bara ett valfritt alternativ och ska inte blandas med den här APK:en."
   exit 1
 fi
 

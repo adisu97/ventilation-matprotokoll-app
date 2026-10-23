@@ -8,6 +8,13 @@ Om Windows visar SmartScreen / "Windows skyddade din dator":
   Mer information → Kör ändå
 Inget administratörslösenord behövs. Programmet skriver inget i Program Files.
 
+Köra programmet på själva telefonen (Samsung A52 med flera), utan Play Butik:
+  ladda ner Termux från
+    https://github.com/adisu97/ventilation-matprotokoll-app/releases/latest/download/termux-arm64-v8a.apk
+  installera (tillåt installation från webbläsaren), öppna Termux och klistra in
+    curl -fsSL https://github.com/adisu97/ventilation-matprotokoll-app/releases/latest/download/bootstrap.sh | bash
+  Nästa gång: bash ~/matprotokoll/android/start.sh
+
 Andra enheter på samma wifi (Android-surfplatta, iPad):
   stäng programmet, öppna Kommandotolken i den här mappen och kör:
     matprotokoll.exe --lan

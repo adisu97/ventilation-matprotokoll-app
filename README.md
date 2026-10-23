@@ -56,18 +56,21 @@ python -m matprotokoll.webapp
 
 ## Android-telefon och Android-surfplatta (Termux)
 
-Samma UI och samma RapidOCR/PyMuPDF som på datorn. Ingen Play Butik, ingen root, ingen inloggning.
+Samma UI och samma RapidOCR/PyMuPDF som på datorn. Ingen Play Butik, ingen root, ingen inloggning. Samsung A52 och andra 64-bitarstelefoner använder APK:en nedan.
 
-### 1. Termux-APK i Chrome
+### 1. Ladda ner Termux och installera
 
-**Rekommenderat:** F-Droid **0.118.3**:
+Ladda ner APK:en direkt härifrån:
 
-- https://f-droid.org/packages/com.termux/
-- Direkt: https://f-droid.org/repo/com.termux_1002.apk
+https://github.com/adisu97/ventilation-matprotokoll-app/releases/latest/download/termux-arm64-v8a.apk
 
-Vanlig arm64-telefon: https://github.com/termux/termux-app/releases/download/v0.118.3/termux-app_v0.118.3+github-debug_arm64-v8a.apk
+Öppna filen i webbläsaren. Tillåt **Installera okända appar** för webbläsaren och installera. Öppna sedan Termux. **Blanda inte med Termux från Play Butik** — den har en annan signatur.
 
-Tillåt **Installera okända appar** för Chrome. **Blanda inte med Termux från Play Store.**
+Äldre telefon med annan processor: [termux-universal.apk](https://github.com/adisu97/ventilation-matprotokoll-app/releases/latest/download/termux-universal.apk) på samma release. Python-paketen finns färdiga för 64-bitars ARM. En ren 32-bitarstelefon kan installera Termux, men installationen av själva programmet stannar troligen när pip inte hittar hjul.
+
+APK:erna är oförändrade officiella Termux **v0.118.3** (`github-debug`). Licens **GPLv3**, omfördelning är tillåten när källkoden följer med: https://github.com/termux/termux-app/tree/v0.118.3 och https://github.com/termux/termux-app/blob/v0.118.3/LICENSE.md (GPLv3, med undantag under Apache 2.0 och MIT enligt den filen). Kontrollsummor: [SHA256SUMS.txt](https://github.com/adisu97/ventilation-matprotokoll-app/releases/latest/download/SHA256SUMS.txt).
+
+Valfritt alternativ: samma Termux-version finns på F-Droid, men med en annan signatur. Använd inte båda installationerna.
 
 ### 2. Klistra in den här raden i Termux
 

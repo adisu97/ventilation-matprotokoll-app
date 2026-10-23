@@ -16,3 +16,4 @@ examples/*.json
 dist/
 build/
 .android-distro
+*.apk
