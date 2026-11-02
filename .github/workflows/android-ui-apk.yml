@@ -41,16 +41,39 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
+      - name: Kontrollera att Starta ligger först och att versionCode är 3
+        run: |
+          set -euo pipefail
+          APK="android-app/app/build/outputs/apk/debug/app-debug.apk"
+          AAPT="${ANDROID_HOME}/build-tools/34.0.0/aapt"
+          code="$("$AAPT" dump badging "$APK" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
+          echo "versionCode=$code"
+          test "$code" = "3"
+          mapfile -t layouts < <(unzip -Z1 "$APK" | grep 'activity_main.xml$' || true)
+          test "${#layouts[@]}" -ge 1
+          for layout in "${layouts[@]}"; do
+            echo "layout $layout"
+            tree="$("$AAPT" dump xmltree "$APK" "$layout")"
+            first="$(printf '%s\n' "$tree" | awk '/^[[:space:]]*E: /{print; exit}')"
+            echo "first element: $first"
+            printf '%s\n' "$first" | grep -q 'LinearLayout'
+            start_line="$(printf '%s\n' "$tree" | awk '/E: Button/{print NR; exit}')"
+            excel_line="$(printf '%s\n' "$tree" | awk '/E: EditText/{print NR; exit}')"
+            echo "button line $start_line excel line $excel_line"
+            test -n "$start_line" -a -n "$excel_line"
+            test "$start_line" -lt "$excel_line"
+          done
+
       - name: Döp om och räkna SHA-256
         run: |
           set -euo pipefail
           cp android-app/app/build/outputs/apk/debug/app-debug.apk ventapp-ui.apk
           sha256sum ventapp-ui.apk | tee SHA256SUMS
 
-      - name: Publicera förhandsrelease ui-apk-2
+      - name: Publicera förhandsrelease ui-apk-3
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ui-apk-2
+          tag_name: ui-apk-3
           target_commitish: ${{ github.sha }}
           name: Android UI
           draft: false
@@ -61,5 +84,5 @@ jobs:
             ventapp-ui.apk
             SHA256SUMS
           body: |
-            Framsida för mätprotokoll (debug-signerad). Avläsning är inte kopplad ännu.
-            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/ui-apk-2/ventapp-ui.apk
+            Framsida för mätprotokoll (debug-signerad), versionCode 3. Starta sitter fast högst upp.
+            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/ui-apk-3/ventapp-ui.apk
