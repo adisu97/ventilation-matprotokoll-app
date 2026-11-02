@@ -46,14 +46,15 @@ jobs:
           set -euo pipefail
           APK="android-app/app/build/outputs/apk/debug/app-debug.apk"
           AAPT="${ANDROID_HOME}/build-tools/34.0.0/aapt"
-          code="$("$AAPT" dump badging "$APK" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
+          badging="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"
+          code="$(printf '%s\n' "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
           echo "versionCode=$code"
           test "$code" = "3"
           mapfile -t layouts < <(unzip -Z1 "$APK" | grep 'activity_main.xml$' || true)
           test "${#layouts[@]}" -ge 1
           for layout in "${layouts[@]}"; do
             echo "layout $layout"
-            tree="$("$AAPT" dump xmltree "$APK" "$layout")"
+            tree="$("$AAPT" dump xmltree "$APK" "$layout" 2>/dev/null || true)"
             first="$(printf '%s\n' "$tree" | awk '/^[[:space:]]*E: /{print; exit}')"
             echo "first element: $first"
             printf '%s\n' "$first" | grep -q 'LinearLayout'
