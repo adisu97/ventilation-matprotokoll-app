@@ -57,7 +57,7 @@ jobs:
           badging="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"
           code="$(printf '%s\n' "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
           echo "versionCode=$code"
-          test "$code" = "4"
+          test "$code" = "5"
           mapfile -t layouts < <(unzip -Z1 "$APK" | grep 'activity_main.xml$' || true)
           test "${#layouts[@]}" -ge 1
           for layout in "${layouts[@]}"; do
@@ -71,16 +71,34 @@ jobs:
             test "$start_line" -lt "$excel_line"
           done
 
-      - name: Döp om och räkna SHA-256
+      - name: Döp om, kontrollera signatur och räkna SHA-256
         run: |
           set -euo pipefail
           cp android-app/app/build/outputs/apk/debug/app-debug.apk ventapp.apk
+          AAPT="${ANDROID_HOME}/build-tools/34.0.0/aapt"
+          APKSIGN="${ANDROID_HOME}/build-tools/34.0.0/apksigner"
+          ZIPALIGN="${ANDROID_HOME}/build-tools/34.0.0/zipalign"
+          "$ZIPALIGN" -c 4 ventapp.apk
+          badging="$("$AAPT" dump badging ventapp.apk 2>/dev/null || true)"
+          printf '%s\n' "$badging" | grep -q "sdkVersion:'21'"
+          printf '%s\n' "$badging" | grep -q "targetSdkVersion:'33'"
+          printf '%s\n' "$badging" | grep -q "armeabi-v7a"
+          printf '%s\n' "$badging" | grep -q "arm64-v8a"
+          "$AAPT" dump xmltree ventapp.apk AndroidManifest.xml 2>/dev/null | grep -q 'extractNativeLibs'
+          if "$AAPT" dump xmltree ventapp.apk AndroidManifest.xml 2>/dev/null | grep -q 'testOnly'; then
+            echo "testOnly is set" >&2
+            exit 1
+          fi
+          "$APKSIGN" verify --verbose --print-certs ventapp.apk | tee /tmp/apksign.txt
+          grep -q "Verified using v1 scheme (JAR signing): true" /tmp/apksign.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/apksign.txt
+          grep -q "CN=Ventapp sideload" /tmp/apksign.txt
           sha256sum ventapp.apk | tee SHA256SUMS
 
-      - name: Publicera förhandsrelease app-apk-1
+      - name: Publicera förhandsrelease app-apk-2
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-apk-1
+          tag_name: app-apk-2
           target_commitish: ${{ github.sha }}
           name: Mätprotokoll Android
           draft: false
@@ -91,5 +109,6 @@ jobs:
             ventapp.apk
             SHA256SUMS
           body: |
-            Mätprotokoll för Android, versionCode 4. OCR och Excel körs på telefonen.
-            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-1/ventapp.apk
+            Mätprotokoll för Android, versionCode 5. Samma sideload-signatur i fortsättningen (v1+v2).
+            En avinstallation av tidigare fi.nyja.ventapp kan behövas en gång.
+            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-2/ventapp.apk

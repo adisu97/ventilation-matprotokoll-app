@@ -54,6 +54,14 @@ python -m matprotokoll.webapp
 
 `--lan` lyssnar på hela wifit. `--quality fast` är samma RapidOCR med färre rutor.
 
+## Android-app (APK, på telefonen)
+
+Debug-signerad sideload-APK: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-2/ventapp.apk
+
+Paket-id är `fi.nyja.ventapp`. **Avinstallera den gamla appen en gång** om telefonen redan har en tidigare test-APK. De byggdes med en ny debug-nyckel vid varje CI-körning, så Android säger "App was not installed" vid uppdatering. Från versionCode 5 används samma nyckel varje gång, och senare APK:er kan installeras ovanpå varandra.
+
+Nyckeln `android-app/signing/ventapp-sideload.keystore` är en **publik engångsnyckel** med lösenordet `ventapp-sideload` i repot. Den finns bara så att sideload-uppdateringar har samma signatur (v1 för Android 5–6 och v2). Den är inte en produktionsnyckel och ska inte användas till något annat.
+
 ## Android-telefon och Android-surfplatta (Termux)
 
 Samma UI och samma RapidOCR/PyMuPDF som på datorn. Ingen Play Butik, ingen root, ingen inloggning. Samsung A52 och andra 64-bitarstelefoner använder APK:en nedan.
