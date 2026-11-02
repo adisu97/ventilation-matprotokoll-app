@@ -10,8 +10,17 @@ android {
         applicationId "fi.nyja.ventapp"
         minSdk 21
         targetSdk 33
-        versionCode 3
-        versionName "1.3"
+        versionCode 4
+        versionName "1.4"
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     compileOptions {
@@ -22,4 +31,13 @@ android {
 
 dependencies {
     implementation "androidx.core:core:1.9.0"
+    implementation "com.microsoft.onnxruntime:onnxruntime-android:1.19.2"
+    testImplementation "junit:junit:4.13.2"
 }
+
+tasks.register("stageTemplate", Copy) {
+    from("../../templates/matprotokoll_grund.xlsx")
+    into("src/main/assets")
+}
+
+preBuild.dependsOn "stageTemplate"

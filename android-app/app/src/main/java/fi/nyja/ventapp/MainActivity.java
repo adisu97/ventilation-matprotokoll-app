@@ -8,8 +8,12 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.net.Uri;
+import android.content.ContentValues;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -26,8 +30,12 @@ import android.widget.Toast;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import fi.nyja.ventapp.engine.SheetNames;
 
 public class MainActivity extends Activity {
     private static final int REQ_DRAWINGS = 1;
@@ -62,6 +70,17 @@ public class MainActivity extends Activity {
     private Uri pendingPhotoUri;
     private String pendingPhotoName;
     private String pendingPhotoPath;
+    private final Runnable jobListener = new Runnable() {
+        @Override
+        public void run() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    applyJob();
+                }
+            });
+        }
+    };
 
     private final PlaceholderExtraction.Listener progressListener = new PlaceholderExtraction.Listener() {
         @Override
@@ -135,7 +154,7 @@ public class MainActivity extends Activity {
         downloadButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Toast.makeText(MainActivity.this, R.string.download_later, Toast.LENGTH_LONG).show();
+                saveExcel();
             }
         });
         excelName.addTextChangedListener(new TextWatcher() {
@@ -178,15 +197,21 @@ public class MainActivity extends Activity {
             showProgress(ProgressSnapshot.fromElapsed((long) entries.size() * PER_FILE_MS, entries.size(), PER_FILE_MS));
             downloadButton.setEnabled(true);
         }
-        if (savedInstanceState != null && savedInstanceState.getBoolean("running", false)) {
-            long elapsed = savedInstanceState.getLong("elapsed", 0L);
-            runTotal = savedInstanceState.getInt("runTotal", entries.size());
-            if (runTotal > 0) {
-                downloadButton.setEnabled(false);
-                extraction.start(runTotal, PER_FILE_MS, elapsed, progressListener);
-            }
-        }
         refreshStartState();
+        applyJob();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        ExtractionService.listen(jobListener);
+        applyJob();
+    }
+
+    @Override
+    protected void onStop() {
+        ExtractionService.unlisten(jobListener);
+        super.onStop();
     }
 
     @Override
@@ -476,13 +501,127 @@ public class MainActivity extends Activity {
             }
             return;
         }
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 8);
+        }
         excelName.setError(null);
         formError.setText("");
         done = false;
         downloadButton.setEnabled(false);
         startButton.setEnabled(false);
         runTotal = entries.size();
-        extraction.start(runTotal, PER_FILE_MS, 0L, progressListener);
+        Intent intent = new Intent(this, ExtractionService.class);
+        intent.putExtra(ExtractionService.EXTRA_EXCEL, SheetNames.workbookFileName(nameFromField()));
+        intent.putExtra(ExtractionService.EXTRA_EXISTING, existingWorkbookUri);
+        intent.putParcelableArrayListExtra(ExtractionService.EXTRA_ITEMS, new ArrayList<DrawingEntry>(entries));
+        if (Build.VERSION.SDK_INT >= 26) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
+        }
+    }
+
+    private String nameFromField() {
+        return excelName.getText().toString().trim();
+    }
+
+    private void applyJob() {
+        ExtractionService.State state = ExtractionService.state();
+        if (state.running) {
+            startButton.setEnabled(false);
+            downloadButton.setEnabled(false);
+            int total = Math.max(1, state.fileCount);
+            float overall = (state.fileIndex + state.fraction) / total;
+            int percent = (int) Math.max(0, Math.min(99, overall * 100f));
+            percentView.setText(percent + " %");
+            progressBar.setProgress(percent);
+            statusView.setText("Läser fil " + (state.fileIndex + 1) + " av " + Math.max(state.fileCount, 1));
+            long elapsed = Math.max(1, SystemClock.elapsedRealtime() - state.startedAt);
+            long remaining = overall < 0.02f ? 0 : (long) (elapsed * (1f - overall) / overall);
+            long seconds = (remaining + 999) / 1000;
+            etaView.setText("Beräknad tid kvar: " + (seconds / 60) + ":" + (seconds % 60 < 10 ? "0" : "") + (seconds % 60));
+            return;
+        }
+        if (state.done && state.xlsx != null) {
+            done = true;
+            percentView.setText("100 %");
+            progressBar.setProgress(100);
+            statusView.setText("Klar");
+            etaView.setText("Beräknad tid kvar: 0:00");
+            downloadButton.setEnabled(true);
+            refreshStartState();
+            if (state.notes != null && !state.notes.isEmpty()) {
+                StringBuilder notes = new StringBuilder();
+                for (String note : state.notes) {
+                    if (notes.length() > 0) {
+                        notes.append('\n');
+                    }
+                    notes.append(note);
+                }
+                formError.setText(notes.toString());
+            }
+            return;
+        }
+        if (state.error != null) {
+            formError.setText(state.error);
+        }
+        refreshStartState();
+    }
+
+    private void saveExcel() {
+        ExtractionService.State state = ExtractionService.state();
+        if (state.xlsx == null) {
+            return;
+        }
+        try {
+            Uri uri = writeDownload(state.filename, state.xlsx);
+            Intent view = new Intent(Intent.ACTION_VIEW);
+            view.setDataAndType(uri, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent share = new Intent(Intent.ACTION_SEND);
+            share.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            share.putExtra(Intent.EXTRA_STREAM, uri);
+            share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(view, "Öppna Excel"));
+        } catch (Exception ex) {
+            Toast.makeText(this, ex.getMessage() == null ? "Kunde inte spara Excel-filen." : ex.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private Uri writeDownload(String filename, byte[] bytes) throws Exception {
+        if (Build.VERSION.SDK_INT >= 29) {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
+            values.put(MediaStore.Downloads.MIME_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+            Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) {
+                throw new IllegalStateException("Kunde inte skapa filen i Hämtade filer.");
+            }
+            OutputStream out = getContentResolver().openOutputStream(uri);
+            if (out == null) {
+                throw new IllegalStateException("Kunde inte skriva Excel-filen.");
+            }
+            try {
+                out.write(bytes);
+            } finally {
+                out.close();
+            }
+            return uri;
+        }
+        File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        if (!dir.exists() && !dir.mkdirs()) {
+            dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        }
+        File file = new File(dir, filename);
+        FileOutputStream out = new FileOutputStream(file);
+        try {
+            out.write(bytes);
+        } finally {
+            out.close();
+        }
+        return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
     }
 
     private boolean canStart() {
@@ -490,7 +629,7 @@ public class MainActivity extends Activity {
     }
 
     private void refreshStartState() {
-        if (extraction.isRunning()) {
+        if (extraction.isRunning() || ExtractionService.state().running) {
             startButton.setEnabled(false);
             return;
         }

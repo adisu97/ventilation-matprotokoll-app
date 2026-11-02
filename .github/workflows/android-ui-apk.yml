@@ -1,8 +1,6 @@
 name: Android UI-APK
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -49,7 +47,7 @@ jobs:
           badging="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"
           code="$(printf '%s\n' "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
           echo "versionCode=$code"
-          test "$code" = "3"
+          test "$code" = "4"
           mapfile -t layouts < <(unzip -Z1 "$APK" | grep 'activity_main.xml$' || true)
           test "${#layouts[@]}" -ge 1
           for layout in "${layouts[@]}"; do
@@ -65,25 +63,5 @@ jobs:
             test "$start_line" -lt "$excel_line"
           done
 
-      - name: Döp om och räkna SHA-256
-        run: |
-          set -euo pipefail
-          cp android-app/app/build/outputs/apk/debug/app-debug.apk ventapp-ui.apk
-          sha256sum ventapp-ui.apk | tee SHA256SUMS
-
-      - name: Publicera förhandsrelease ui-apk-3
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ui-apk-3
-          target_commitish: ${{ github.sha }}
-          name: Android UI
-          draft: false
-          prerelease: true
-          make_latest: "false"
-          overwrite_files: true
-          files: |
-            ventapp-ui.apk
-            SHA256SUMS
-          body: |
-            Framsida för mätprotokoll (debug-signerad), versionCode 3. Starta sitter fast högst upp.
-            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/ui-apk-3/ventapp-ui.apk
+      - name: Bygget är bara en manuell kontroll
+        run: echo "Publicerar inte. app-apk-1 görs av Android app-APK."

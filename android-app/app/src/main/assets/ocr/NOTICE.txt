@@ -1,0 +1,12 @@
+PP-OCRv4 detection and recognition models (ch_PP-OCRv4_det_infer.onnx,
+ch_PP-OCRv4_rec_infer.onnx) are derived from PaddleOCR and distributed
+with RapidOCR 1.4.4.
+
+Copyright in the model weights is held by Baidu / the PaddleOCR authors.
+The models and RapidOCR are licensed under the Apache License, Version 2.0.
+https://www.apache.org/licenses/LICENSE-2.0
+https://github.com/PaddlePaddle/PaddleOCR
+https://github.com/RapidAI/RapidOCR
+
+ONNX Runtime is MIT licensed: https://github.com/microsoft/onnxruntime
+The character list is the model metadata from the recognition ONNX file.
