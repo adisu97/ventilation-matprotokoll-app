@@ -71,15 +71,29 @@ jobs:
             test "$start_line" -lt "$excel_line"
           done
 
-      - name: Döp om, kontrollera signatur och räkna SHA-256
+      - name: Döp om, signera om v1+v2, kontrollera och räkna SHA-256
         run: |
           set -euo pipefail
-          cp android-app/app/build/outputs/apk/debug/app-debug.apk ventapp.apk
           AAPT="${ANDROID_HOME}/build-tools/34.0.0/aapt"
           APKSIGN="${ANDROID_HOME}/build-tools/34.0.0/apksigner"
           ZIPALIGN="${ANDROID_HOME}/build-tools/34.0.0/zipalign"
-          "$ZIPALIGN" -c 4 ventapp.apk
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk /tmp/unsigned.apk
+          zip -d /tmp/unsigned.apk 'META-INF/*' || true
+          "$ZIPALIGN" -f 4 /tmp/unsigned.apk /tmp/aligned.apk
+          "$APKSIGN" sign \
+            --ks android-app/signing/ventapp-sideload.keystore \
+            --ks-key-alias ventapp \
+            --ks-pass pass:ventapp-sideload \
+            --key-pass pass:ventapp-sideload \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out ventapp.apk \
+            /tmp/aligned.apk
+          echo "zipalign check:"
+          "$ZIPALIGN" -c -v 4 ventapp.apk | tail -5
           badging="$("$AAPT" dump badging ventapp.apk 2>/dev/null || true)"
+          echo "$badging" | head -5
           printf '%s\n' "$badging" | grep -q "sdkVersion:'21'"
           printf '%s\n' "$badging" | grep -q "targetSdkVersion:'33'"
           printf '%s\n' "$badging" | grep -q "armeabi-v7a"
