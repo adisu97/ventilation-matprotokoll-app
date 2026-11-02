@@ -96,8 +96,12 @@ jobs:
           echo "$badging" | head -5
           printf '%s\n' "$badging" | grep -q "sdkVersion:'21'"
           printf '%s\n' "$badging" | grep -q "targetSdkVersion:'33'"
-          printf '%s\n' "$badging" | grep -q "armeabi-v7a"
-          printf '%s\n' "$badging" | grep -q "arm64-v8a"
+          unzip -l ventapp.apk | grep -q 'lib/armeabi-v7a/libonnxruntime.so'
+          unzip -l ventapp.apk | grep -q 'lib/arm64-v8a/libonnxruntime.so'
+          if unzip -l ventapp.apk | grep -q 'lib/x86/'; then
+            echo "unexpected x86 native library" >&2
+            exit 1
+          fi
           "$AAPT" dump xmltree ventapp.apk AndroidManifest.xml 2>/dev/null | grep -q 'extractNativeLibs'
           if "$AAPT" dump xmltree ventapp.apk AndroidManifest.xml 2>/dev/null | grep -q 'testOnly'; then
             echo "testOnly is set" >&2
