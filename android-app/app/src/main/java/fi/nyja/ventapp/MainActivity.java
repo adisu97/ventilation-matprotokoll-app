@@ -11,13 +11,15 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -28,10 +30,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends Activity {
-    private static final int REQ_PDF = 1;
+    private static final int REQ_DRAWINGS = 1;
     private static final int REQ_CAMERA = 2;
     private static final int REQ_CAMERA_PERMISSION = 3;
+    private static final int REQ_WORKBOOK = 4;
     private static final long PER_FILE_MS = 1000L;
+    private static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     private final ArrayList<DrawingEntry> entries = new ArrayList<DrawingEntry>();
     private final PlaceholderExtraction extraction = new PlaceholderExtraction();
@@ -44,12 +48,17 @@ public class MainActivity extends Activity {
     private TextView statusView;
     private TextView etaView;
     private TextView formError;
+    private TextView workbookMode;
     private Button startButton;
     private Button downloadButton;
+    private Switch appendExisting;
 
     private int nextPhoto = 1;
     private boolean done;
     private int runTotal;
+    private boolean ignoreSwitch;
+    private String existingWorkbookUri;
+    private String existingWorkbookName;
     private Uri pendingPhotoUri;
     private String pendingPhotoName;
     private String pendingPhotoPath;
@@ -63,9 +72,9 @@ public class MainActivity extends Activity {
         @Override
         public void onComplete(ProgressSnapshot snapshot) {
             done = true;
-            startButton.setEnabled(true);
             downloadButton.setEnabled(true);
             showProgress(snapshot);
+            refreshStartState();
         }
     };
 
@@ -81,19 +90,40 @@ public class MainActivity extends Activity {
         statusView = findViewById(R.id.status);
         etaView = findViewById(R.id.eta);
         formError = findViewById(R.id.formError);
+        workbookMode = findViewById(R.id.workbookMode);
         startButton = findViewById(R.id.start);
         downloadButton = findViewById(R.id.download);
+        appendExisting = findViewById(R.id.appendExisting);
 
         findViewById(R.id.pickPdfs).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                pickPdfs();
+                pickDrawings();
             }
         });
         findViewById(R.id.takePhoto).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 takePhoto();
+            }
+        });
+        findViewById(R.id.appendLabel).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                appendExisting.toggle();
+            }
+        });
+        appendExisting.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton button, boolean checked) {
+                if (ignoreSwitch) {
+                    return;
+                }
+                if (checked) {
+                    pickExistingWorkbook();
+                } else {
+                    clearExistingWorkbook();
+                }
             }
         });
         startButton.setOnClickListener(new View.OnClickListener() {
@@ -108,6 +138,22 @@ public class MainActivity extends Activity {
                 Toast.makeText(MainActivity.this, R.string.download_later, Toast.LENGTH_LONG).show();
             }
         });
+        excelName.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (!extraction.isRunning()) {
+                    refreshStartState();
+                }
+            }
+        });
 
         if (savedInstanceState != null) {
             ArrayList<DrawingEntry> saved = savedInstanceState.getParcelableArrayList("entries");
@@ -117,10 +163,16 @@ public class MainActivity extends Activity {
             nextPhoto = savedInstanceState.getInt("nextPhoto", 1);
             done = savedInstanceState.getBoolean("done", false);
             runTotal = savedInstanceState.getInt("runTotal", entries.size());
+            existingWorkbookUri = savedInstanceState.getString("existingWorkbookUri");
+            existingWorkbookName = savedInstanceState.getString("existingWorkbookName");
             pendingPhotoUri = savedInstanceState.getParcelable("pendingPhoto");
             pendingPhotoName = savedInstanceState.getString("pendingName");
             pendingPhotoPath = savedInstanceState.getString("pendingPath");
+            ignoreSwitch = true;
+            appendExisting.setChecked(existingWorkbookUri != null);
+            ignoreSwitch = false;
         }
+        showWorkbookMode();
         renderList();
         if (done && !entries.isEmpty()) {
             showProgress(ProgressSnapshot.fromElapsed((long) entries.size() * PER_FILE_MS, entries.size(), PER_FILE_MS));
@@ -130,10 +182,23 @@ public class MainActivity extends Activity {
             long elapsed = savedInstanceState.getLong("elapsed", 0L);
             runTotal = savedInstanceState.getInt("runTotal", entries.size());
             if (runTotal > 0) {
-                startButton.setEnabled(false);
                 downloadButton.setEnabled(false);
                 extraction.start(runTotal, PER_FILE_MS, elapsed, progressListener);
             }
+        }
+        refreshStartState();
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        ignoreSwitch = true;
+        super.onRestoreInstanceState(savedInstanceState);
+        appendExisting.setChecked(existingWorkbookUri != null);
+        ignoreSwitch = false;
+        showWorkbookMode();
+        refreshStartState();
+        if (done && !extraction.isRunning()) {
+            downloadButton.setEnabled(true);
         }
     }
 
@@ -146,6 +211,8 @@ public class MainActivity extends Activity {
         outState.putBoolean("running", extraction.isRunning());
         outState.putLong("elapsed", extraction.elapsedMs());
         outState.putInt("runTotal", runTotal);
+        outState.putString("existingWorkbookUri", existingWorkbookUri);
+        outState.putString("existingWorkbookName", existingWorkbookName);
         if (pendingPhotoUri != null) {
             outState.putParcelable("pendingPhoto", pendingPhotoUri);
         }
@@ -159,13 +226,27 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    private void pickPdfs() {
+    private void pickDrawings() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("application/pdf");
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/pdf", "image/*"});
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        startActivityForResult(intent, REQ_PDF);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+        startActivityForResult(intent, REQ_DRAWINGS);
+    }
+
+    private void pickExistingWorkbook() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(XLSX_MIME);
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{XLSX_MIME});
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(intent, REQ_WORKBOOK);
     }
 
     private void takePhoto() {
@@ -209,15 +290,24 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQ_PDF && resultCode == RESULT_OK && data != null) {
-            addPickedPdfs(data);
+        if (requestCode == REQ_DRAWINGS && resultCode == RESULT_OK && data != null) {
+            addPickedDrawings(data);
+        } else if (requestCode == REQ_WORKBOOK) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                Uri uri = data.getData();
+                persistRead(data, uri);
+                existingWorkbookUri = uri.toString();
+                existingWorkbookName = displayName(uri);
+                showWorkbookMode();
+            } else {
+                clearExistingWorkbook();
+            }
         } else if (requestCode == REQ_CAMERA) {
             if (resultCode == RESULT_OK && pendingPhotoUri != null && photoFileHasBytes()) {
                 entries.add(new DrawingEntry(
                         pendingPhotoName,
                         pendingPhotoUri.toString(),
                         DrawingEntry.KIND_PHOTO,
-                        DrawingEntry.MODE_SHEET,
                         pendingPhotoPath));
                 nextPhoto += 1;
                 onDrawingsChanged();
@@ -242,36 +332,44 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void addPickedPdfs(Intent data) {
+    private void addPickedDrawings(Intent data) {
+        ArrayList<Uri> uris = OpenDocumentUris.collect(data);
         int before = entries.size();
-        ClipData clip = data.getClipData();
-        if (clip != null) {
-            for (int i = 0; i < clip.getItemCount(); i++) {
-                addPdf(clip.getItemAt(i).getUri());
-            }
-        } else if (data.getData() != null) {
-            addPdf(data.getData());
+        for (int i = 0; i < uris.size(); i++) {
+            addDrawingUri(data, uris.get(i));
         }
         if (entries.size() != before) {
             onDrawingsChanged();
         }
     }
 
-    private void addPdf(Uri uri) {
+    private void addDrawingUri(Intent data, Uri uri) {
         if (uri == null) {
             return;
         }
-        try {
-            getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        } catch (SecurityException ignored) {
-            // Some pickers only grant temporary access. The name can still be shown.
+        persistRead(data, uri);
+        String mime = getContentResolver().getType(uri);
+        String kind = mime != null && mime.startsWith("image/")
+                ? DrawingEntry.KIND_IMAGE
+                : DrawingEntry.KIND_PDF;
+        entries.add(new DrawingEntry(displayName(uri), uri.toString(), kind, null));
+    }
+
+    private void persistRead(Intent data, Uri uri) {
+        int granted = data.getFlags()
+                & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        if ((granted & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0) {
+            granted = Intent.FLAG_GRANT_READ_URI_PERMISSION;
         }
-        entries.add(new DrawingEntry(
-                displayName(uri),
-                uri.toString(),
-                DrawingEntry.KIND_PDF,
-                DrawingEntry.MODE_SHEET,
-                null));
+        try {
+            getContentResolver().takePersistableUriPermission(uri, granted);
+        } catch (SecurityException first) {
+            try {
+                getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (SecurityException ignored) {
+                // The picker may only have granted temporary access for this session.
+            }
+        }
     }
 
     private String displayName(Uri uri) {
@@ -289,7 +387,7 @@ public class MainActivity extends Activity {
             }
         }
         String last = uri.getLastPathSegment();
-        return last == null ? "ritning.pdf" : last;
+        return last == null ? "ritning" : last;
     }
 
     private boolean photoFileHasBytes() {
@@ -312,17 +410,33 @@ public class MainActivity extends Activity {
         pendingPhotoPath = null;
     }
 
+    private void clearExistingWorkbook() {
+        existingWorkbookUri = null;
+        existingWorkbookName = null;
+        ignoreSwitch = true;
+        appendExisting.setChecked(false);
+        ignoreSwitch = false;
+        showWorkbookMode();
+    }
+
+    private void showWorkbookMode() {
+        if (existingWorkbookUri != null && existingWorkbookName != null) {
+            workbookMode.setText(getString(R.string.existing_chosen, existingWorkbookName));
+        } else {
+            workbookMode.setText(R.string.new_workbook_hint);
+        }
+    }
+
     private void onDrawingsChanged() {
         extraction.cancel();
         done = false;
-        startButton.setEnabled(true);
         downloadButton.setEnabled(false);
-        formError.setText("");
         percentView.setText(R.string.percent_zero);
         progressBar.setProgress(0);
         statusView.setText(R.string.status_idle);
         etaView.setText(R.string.eta_idle);
         renderList();
+        refreshStartState();
     }
 
     private void renderList() {
@@ -337,23 +451,6 @@ public class MainActivity extends Activity {
         View row = getLayoutInflater().inflate(R.layout.item_drawing, fileList, false);
         TextView name = row.findViewById(R.id.drawingName);
         name.setText(entry.name);
-        RadioGroup group = row.findViewById(R.id.modeGroup);
-        RadioButton sheet = row.findViewById(R.id.modeSheet);
-        RadioButton file = row.findViewById(R.id.modeFile);
-        if (DrawingEntry.MODE_FILE.equals(entry.mode)) {
-            file.setChecked(true);
-        } else {
-            sheet.setChecked(true);
-        }
-        group.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(RadioGroup radioGroup, int checkedId) {
-                entry.mode = checkedId == R.id.modeFile ? DrawingEntry.MODE_FILE : DrawingEntry.MODE_SHEET;
-                if (done || extraction.isRunning()) {
-                    markNotDone();
-                }
-            }
-        });
         row.findViewById(R.id.remove).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -371,15 +468,12 @@ public class MainActivity extends Activity {
     }
 
     private void start() {
-        String name = excelName.getText().toString().trim();
-        if (name.length() == 0) {
-            excelName.setError(getString(R.string.name_required));
-            excelName.requestFocus();
-            formError.setText(R.string.name_required);
-            return;
-        }
-        if (entries.isEmpty()) {
-            formError.setText(R.string.drawings_required);
+        if (!canStart()) {
+            refreshStartState();
+            if (excelName.getText().toString().trim().length() == 0) {
+                excelName.setError(getString(R.string.name_required));
+                excelName.requestFocus();
+            }
             return;
         }
         excelName.setError(null);
@@ -391,15 +485,30 @@ public class MainActivity extends Activity {
         extraction.start(runTotal, PER_FILE_MS, 0L, progressListener);
     }
 
-    private void markNotDone() {
-        extraction.cancel();
-        done = false;
-        startButton.setEnabled(true);
-        downloadButton.setEnabled(false);
-        percentView.setText(R.string.percent_zero);
-        progressBar.setProgress(0);
-        statusView.setText(R.string.status_idle);
-        etaView.setText(R.string.eta_idle);
+    private boolean canStart() {
+        return excelName.getText().toString().trim().length() > 0 && !entries.isEmpty();
+    }
+
+    private void refreshStartState() {
+        if (extraction.isRunning()) {
+            startButton.setEnabled(false);
+            return;
+        }
+        boolean nameOk = excelName.getText().toString().trim().length() > 0;
+        boolean drawingsOk = !entries.isEmpty();
+        startButton.setEnabled(nameOk && drawingsOk);
+        if (nameOk) {
+            excelName.setError(null);
+        }
+        if (nameOk && drawingsOk) {
+            formError.setText("");
+        } else if (!nameOk && !drawingsOk) {
+            formError.setText(R.string.need_name_and_drawings);
+        } else if (!nameOk) {
+            formError.setText(R.string.name_required);
+        } else {
+            formError.setText(R.string.drawings_required);
+        }
     }
 
     private void showProgress(ProgressSnapshot snapshot) {

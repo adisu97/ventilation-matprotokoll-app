@@ -47,10 +47,10 @@ jobs:
           cp android-app/app/build/outputs/apk/debug/app-debug.apk ventapp-ui.apk
           sha256sum ventapp-ui.apk | tee SHA256SUMS
 
-      - name: Publicera förhandsrelease ui-apk-1
+      - name: Publicera förhandsrelease ui-apk-2
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ui-apk-1
+          tag_name: ui-apk-2
           target_commitish: ${{ github.sha }}
           name: Android UI
           draft: false
@@ -62,4 +62,4 @@ jobs:
             SHA256SUMS
           body: |
             Framsida för mätprotokoll (debug-signerad). Avläsning är inte kopplad ännu.
-            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/ui-apk-1/ventapp-ui.apk
+            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/ui-apk-2/ventapp-ui.apk

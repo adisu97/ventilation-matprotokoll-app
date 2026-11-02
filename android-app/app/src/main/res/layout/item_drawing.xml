@@ -4,58 +4,29 @@
     android:layout_height="wrap_content"
     android:layout_marginBottom="@dimen/gap"
     android:background="@color/row_bg"
-    android:orientation="vertical"
+    android:gravity="center_vertical"
+    android:minHeight="64dp"
+    android:orientation="horizontal"
     android:padding="12dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <TextView
+        android:id="@+id/drawingName"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:textSize="@dimen/body_text"
+        android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/drawingName"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:textSize="@dimen/body_text"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/remove"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:minHeight="56dp"
-            android:minWidth="96dp"
-            android:text="@string/remove"
-            android:textSize="16sp" />
-    </LinearLayout>
-
-    <RadioGroup
-        android:id="@+id/modeGroup"
-        android:layout_width="match_parent"
+    <Button
+        android:id="@+id/remove"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:orientation="vertical">
-
-        <RadioButton
-            android:id="@+id/modeSheet"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:text="@string/mode_sheet"
-            android:textSize="@dimen/body_text" />
-
-        <RadioButton
-            android:id="@+id/modeFile"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:text="@string/mode_file"
-            android:textSize="@dimen/body_text" />
-    </RadioGroup>
+        android:layout_marginStart="8dp"
+        android:minHeight="56dp"
+        android:minWidth="96dp"
+        android:text="@string/remove"
+        android:textSize="16sp" />
 
 </LinearLayout>

@@ -10,72 +10,25 @@
         android:orientation="vertical"
         android:padding="@dimen/screen_padding">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:labelFor="@id/excelName"
-            android:text="@string/excel_label"
-            android:textSize="@dimen/body_text"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/excelName"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:hint="@string/excel_hint"
-            android:importantForAutofill="no"
-            android:inputType="text"
-            android:minHeight="@dimen/button_height"
-            android:singleLine="true"
-            android:textSize="@dimen/body_text" />
-
-        <Button
-            android:id="@+id/pickPdfs"
-            style="@style/BigButton"
-            android:layout_marginTop="@dimen/gap"
-            android:text="@string/pick_pdfs" />
-
-        <Button
-            android:id="@+id/takePhoto"
-            style="@style/BigButton"
-            android:layout_marginTop="@dimen/gap"
-            android:text="@string/take_photo" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap"
-            android:text="@string/list_heading"
-            android:textSize="@dimen/body_text"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/emptyList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/empty_list"
-            android:textSize="@dimen/body_text" />
-
-        <LinearLayout
-            android:id="@+id/fileList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:orientation="vertical" />
-
         <Button
             android:id="@+id/start"
             style="@style/BigButton"
-            android:layout_marginTop="@dimen/gap"
+            android:enabled="false"
             android:text="@string/start" />
+
+        <TextView
+            android:id="@+id/formError"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/error"
+            android:textSize="@dimen/body_text" />
 
         <TextView
             android:id="@+id/percent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap"
+            android:layout_marginTop="4dp"
             android:gravity="center_horizontal"
             android:text="@string/percent_zero"
             android:textSize="@dimen/percent_text"
@@ -109,20 +62,101 @@
             android:text="@string/eta_idle"
             android:textSize="@dimen/body_text" />
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/gap"
+            android:labelFor="@id/excelName"
+            android:text="@string/excel_label"
+            android:textSize="@dimen/body_text"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/excelName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:hint="@string/excel_hint"
+            android:importantForAutofill="no"
+            android:inputType="text"
+            android:minHeight="@dimen/button_height"
+            android:singleLine="true"
+            android:textSize="@dimen/body_text" />
+
+        <Button
+            android:id="@+id/pickPdfs"
+            style="@style/BigButton"
+            android:layout_marginTop="@dimen/gap"
+            android:text="@string/pick_pdfs" />
+
+        <Button
+            android:id="@+id/takePhoto"
+            style="@style/BigButton"
+            android:layout_marginTop="@dimen/gap"
+            android:text="@string/take_photo" />
+
+        <LinearLayout
+            android:id="@+id/appendRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/gap"
+            android:gravity="center_vertical"
+            android:minHeight="64dp"
+            android:orientation="horizontal">
+
+            <Switch
+                android:id="@+id/appendExisting"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:minWidth="56dp" />
+
+            <TextView
+                android:id="@+id/appendLabel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="@string/append_existing"
+                android:textSize="@dimen/body_text" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/workbookMode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/new_workbook_hint"
+            android:textSize="@dimen/body_text" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/gap"
+            android:text="@string/list_heading"
+            android:textSize="@dimen/body_text"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/emptyList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/empty_list"
+            android:textSize="@dimen/body_text" />
+
+        <LinearLayout
+            android:id="@+id/fileList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="vertical" />
+
         <Button
             android:id="@+id/download"
             style="@style/BigButton"
             android:layout_marginTop="@dimen/gap"
             android:enabled="false"
             android:text="@string/download" />
-
-        <TextView
-            android:id="@+id/formError"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textColor="@color/error"
-            android:textSize="@dimen/body_text" />
 
     </LinearLayout>
 </ScrollView>

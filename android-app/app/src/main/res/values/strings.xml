@@ -8,9 +8,11 @@
     <string name="list_heading">Valda ritningar</string>
     <string name="empty_list">Inga ritningar valda ännu.</string>
     <string name="remove">Ta bort</string>
-    <string name="mode_sheet">Ny flik i filen</string>
-    <string name="mode_file">Ny Excel-fil</string>
+    <string name="append_existing">Lägg till i befintlig Excel-fil (ny flik)</string>
+    <string name="new_workbook_hint">Ny Excel-fil från namnet ovan, ett blad per ritning.</string>
+    <string name="existing_chosen">Vald fil: %1$s</string>
     <string name="start">Starta</string>
+    <string name="need_name_and_drawings">Fyll i namnet på Excel-filen och välj minst en ritning.</string>
     <string name="download">Ladda ner Excel</string>
     <string name="percent_zero">0 %</string>
     <string name="status_idle">Inte startad</string>
