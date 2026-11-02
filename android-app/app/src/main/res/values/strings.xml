@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mätprotokoll</string>
+    <string name="excel_label">Namn på Excel-filen</string>
+    <string name="excel_hint">t.ex. matprotokoll.xlsx</string>
+    <string name="pick_pdfs">Välj PDF-ritningar</string>
+    <string name="take_photo">Ta foto</string>
+    <string name="list_heading">Valda ritningar</string>
+    <string name="empty_list">Inga ritningar valda ännu.</string>
+    <string name="remove">Ta bort</string>
+    <string name="mode_sheet">Ny flik i filen</string>
+    <string name="mode_file">Ny Excel-fil</string>
+    <string name="start">Starta</string>
+    <string name="download">Ladda ner Excel</string>
+    <string name="percent_zero">0 %</string>
+    <string name="status_idle">Inte startad</string>
+    <string name="eta_idle">Beräknad tid kvar: –</string>
+    <string name="name_required">Fyll i namnet på Excel-filen.</string>
+    <string name="drawings_required">Välj minst en PDF eller ta ett foto.</string>
+    <string name="no_camera">Hittar ingen kamera-app.</string>
+    <string name="camera_denied">Kameran behöver tillstånd för att ta foto.</string>
+    <string name="photo_failed">Fotot kunde inte sparas.</string>
+    <string name="photo_added">Foto tillagt. Tryck på Ta foto igen för nästa ritning.</string>
+    <string name="download_later">Nedladdningen kopplas på när avläsningen är riktig.</string>
+    <string name="photo_name">Foto %1$d</string>
+</resources>
