@@ -13,9 +13,9 @@ public final class SheetNames {
     }
 
     public static String fromFileName(String filename, List<String> existing) {
-        String stem = filename == null ? "" : filename;
+        String stem = filename == null ? "" : filename.trim();
         int slash = Math.max(stem.lastIndexOf('/'), stem.lastIndexOf('\\'));
-        if (slash >= 0) {
+        if (slash >= 0 && (stem.startsWith("/") || stem.startsWith("content:") || stem.contains("://"))) {
             stem = stem.substring(slash + 1);
         }
         int dot = stem.lastIndexOf('.');
