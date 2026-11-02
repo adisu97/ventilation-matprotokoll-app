@@ -86,10 +86,10 @@ jobs:
             win-mini.json
             win-mini.xlsx
       - name: Käll-ZIP till Android-bootstrap
-        if: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
         run: git archive --format=zip --output source.zip HEAD
       - name: Hämta Termux-APK:er som ska följa med releasen
-        if: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
         shell: bash
         run: |
           set -euo pipefail
@@ -99,7 +99,7 @@ jobs:
             curl -fL --retry 3 -o "termux-keep/$f" "$base/$f"
           done
       - name: Publicera GitHub Release
-        if: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('portable-{0}', github.sha) }}
