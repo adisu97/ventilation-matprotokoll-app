@@ -100,7 +100,20 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        try {
+            createScreen(savedInstanceState);
+        } catch (Throwable error) {
+            CrashLog.report(this, error);
+            finish();
+        }
+    }
+
+    private void createScreen(Bundle savedInstanceState) {
         setContentView(R.layout.activity_main);
+        TextView versionView = findViewById(R.id.versionLabel);
+        if (versionView != null) {
+            versionView.setText(CrashLog.versionLabel(this));
+        }
         excelName = findViewById(R.id.excelName);
         fileList = findViewById(R.id.fileList);
         emptyList = findViewById(R.id.emptyList);
@@ -113,6 +126,13 @@ public class MainActivity extends Activity {
         startButton = findViewById(R.id.start);
         downloadButton = findViewById(R.id.download);
         appendExisting = findViewById(R.id.appendExisting);
+        if (excelName == null || fileList == null || emptyList == null || percentView == null
+                || progressBar == null || statusView == null || etaView == null || formError == null
+                || workbookMode == null || startButton == null || downloadButton == null
+                || appendExisting == null || findViewById(R.id.pickPdfs) == null
+                || findViewById(R.id.takePhoto) == null) {
+            throw new IllegalStateException("Skärmen saknar en nödvändig vy.");
+        }
 
         findViewById(R.id.pickPdfs).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -204,6 +224,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onStart() {
         super.onStart();
+        if (excelName == null) {
+            return;
+        }
         ExtractionService.listen(jobListener);
         applyJob();
     }
@@ -218,6 +241,10 @@ public class MainActivity extends Activity {
     protected void onRestoreInstanceState(Bundle savedInstanceState) {
         ignoreSwitch = true;
         super.onRestoreInstanceState(savedInstanceState);
+        if (appendExisting == null) {
+            ignoreSwitch = false;
+            return;
+        }
         appendExisting.setChecked(existingWorkbookUri != null);
         ignoreSwitch = false;
         showWorkbookMode();

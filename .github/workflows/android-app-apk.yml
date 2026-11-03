@@ -2,7 +2,7 @@ name: Android app-APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, cursor/startup-crash-apk3-82ba]
     paths:
       - "android-app/**"
       - ".github/workflows/android-app-apk.yml"
@@ -43,21 +43,22 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew testDebugUnitTest --no-daemon --stacktrace
+          ./gradlew testUniversalDebugUnitTest --no-daemon --stacktrace
 
       - name: Bygg debug-signerad APK
         working-directory: android-app
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Kontrollera Starta överst och versionCode 4
+      - name: Kontrollera Starta överst och versionCode 6
         run: |
           set -euo pipefail
-          APK="android-app/app/build/outputs/apk/debug/app-debug.apk"
+          APK="android-app/app/build/outputs/apk/universal/debug/app-universal-debug.apk"
           AAPT="${ANDROID_HOME}/build-tools/34.0.0/aapt"
           badging="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"
           code="$(printf '%s\n' "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
           echo "versionCode=$code"
-          test "$code" = "5"
+          test "$code" = "6"
+          printf '%s\n' "$badging" | grep -q "launchable-activity: name='fi.nyja.ventapp.MainActivity'"
           mapfile -t layouts < <(unzip -Z1 "$APK" | grep 'activity_main.xml$' || true)
           test "${#layouts[@]}" -ge 1
           for layout in "${layouts[@]}"; do
@@ -77,56 +78,118 @@ jobs:
           AAPT="${ANDROID_HOME}/build-tools/34.0.0/aapt"
           APKSIGN="${ANDROID_HOME}/build-tools/34.0.0/apksigner"
           ZIPALIGN="${ANDROID_HOME}/build-tools/34.0.0/zipalign"
-          cp android-app/app/build/outputs/apk/debug/app-debug.apk /tmp/unsigned.apk
-          zip -d /tmp/unsigned.apk 'META-INF/*' || true
-          "$ZIPALIGN" -f 4 /tmp/unsigned.apk /tmp/aligned.apk
-          "$APKSIGN" sign \
-            --ks android-app/signing/ventapp-sideload.keystore \
-            --ks-key-alias ventapp \
-            --ks-pass pass:ventapp-sideload \
-            --key-pass pass:ventapp-sideload \
-            --v1-signing-enabled true \
-            --v2-signing-enabled true \
-            --v3-signing-enabled true \
-            --out ventapp.apk \
-            /tmp/aligned.apk
-          echo "zipalign check:"
-          "$ZIPALIGN" -c -v 4 ventapp.apk | tail -5
-          badging="$("$AAPT" dump badging ventapp.apk 2>/dev/null || true)"
-          echo "$badging" | head -5
-          printf '%s\n' "$badging" | grep -q "sdkVersion:'21'"
-          printf '%s\n' "$badging" | grep -q "targetSdkVersion:'33'"
+          sign_apk() {
+            src="$1"
+            out="$2"
+            cp "$src" /tmp/unsigned.apk
+            zip -d /tmp/unsigned.apk 'META-INF/*' || true
+            "$ZIPALIGN" -f 4 /tmp/unsigned.apk /tmp/aligned.apk
+            "$APKSIGN" sign \
+              --ks android-app/signing/ventapp-sideload.keystore \
+              --ks-key-alias ventapp \
+              --ks-pass pass:ventapp-sideload \
+              --key-pass pass:ventapp-sideload \
+              --v1-signing-enabled true \
+              --v2-signing-enabled true \
+              --v3-signing-enabled true \
+              --out "$out" \
+              /tmp/aligned.apk
+            "$ZIPALIGN" -c -v 4 "$out" | tail -3
+            "$APKSIGN" verify --verbose --print-certs "$out" | tee "/tmp/apksign-${out}.txt"
+            grep -q "Verified using v1 scheme (JAR signing): true" "/tmp/apksign-${out}.txt"
+            grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" "/tmp/apksign-${out}.txt"
+            grep -q "CN=Ventapp sideload" "/tmp/apksign-${out}.txt"
+            badging="$("$AAPT" dump badging "$out" 2>/dev/null || true)"
+            printf '%s\n' "$badging" | grep -q "sdkVersion:'21'"
+            printf '%s\n' "$badging" | grep -q "targetSdkVersion:'33'"
+            printf '%s\n' "$badging" | grep -q "versionCode='6'"
+            printf '%s\n' "$badging" | grep -q "name='fi.nyja.ventapp'"
+            unzip -v "$out" | grep 'assets/ocr/det.onnx' | grep -q 'Defl'
+            unzip -v "$out" | grep 'assets/ocr/rec.onnx' | grep -q 'Defl'
+            if unzip -l "$out" | grep -q 'lib/x86/'; then
+              echo "unexpected x86 native library in $out" >&2
+              exit 1
+            fi
+            if "$AAPT" dump xmltree "$out" AndroidManifest.xml 2>/dev/null | grep -q 'testOnly'; then
+              echo "testOnly is set in $out" >&2
+              exit 1
+            fi
+          }
+          sign_apk android-app/app/build/outputs/apk/universal/debug/app-universal-debug.apk ventapp.apk
+          sign_apk android-app/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk ventapp-arm64.apk
           unzip -l ventapp.apk | grep -q 'lib/armeabi-v7a/libonnxruntime.so'
           unzip -l ventapp.apk | grep -q 'lib/arm64-v8a/libonnxruntime.so'
-          if unzip -l ventapp.apk | grep -q 'lib/x86/'; then
-            echo "unexpected x86 native library" >&2
+          unzip -l ventapp-arm64.apk | grep -q 'lib/arm64-v8a/libonnxruntime.so'
+          if unzip -l ventapp-arm64.apk | grep -q 'lib/armeabi-v7a/'; then
+            echo "arm64 APK still contains armeabi-v7a" >&2
             exit 1
           fi
-          "$AAPT" dump xmltree ventapp.apk AndroidManifest.xml 2>/dev/null | grep -q 'extractNativeLibs'
-          if "$AAPT" dump xmltree ventapp.apk AndroidManifest.xml 2>/dev/null | grep -q 'testOnly'; then
-            echo "testOnly is set" >&2
-            exit 1
-          fi
-          "$APKSIGN" verify --verbose --print-certs ventapp.apk | tee /tmp/apksign.txt
-          grep -q "Verified using v1 scheme (JAR signing): true" /tmp/apksign.txt
-          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/apksign.txt
-          grep -q "CN=Ventapp sideload" /tmp/apksign.txt
-          sha256sum ventapp.apk | tee SHA256SUMS
+          echo "sizes:"
+          ls -l ventapp.apk ventapp-arm64.apk
+          sha256sum ventapp.apk ventapp-arm64.apk | tee SHA256SUMS
+          cat > release-body.md << EOF
+          Mätprotokoll för Android, version 1.6 (versionCode 6). Samma sideload-signatur som version 5 (v1+v2).
 
-      - name: Publicera förhandsrelease app-apk-2
+          ventapp.apk ($(stat -c%s ventapp.apk) byte) innehåller arm64-v8a och armeabi-v7a.
+          ventapp-arm64.apk ($(stat -c%s ventapp-arm64.apk) byte) är samma app med bara arm64-v8a, för telefoner som Galaxy A52.
+
+          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-3/ventapp.apk
+          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-3/ventapp-arm64.apk
+
+          Versionsnumret syns överst. En krasch vid start visar texten och sparar Nedladdningar/ventapp-crashlog.txt.
+          EOF
+          sed -i 's/^          //' release-body.md
+
+      - name: Publicera förhandsrelease app-apk-3
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-apk-2
+          tag_name: app-apk-3
           target_commitish: ${{ github.sha }}
           name: Mätprotokoll Android
           draft: false
           prerelease: true
           make_latest: "false"
           overwrite_files: true
+          body_path: release-body.md
           files: |
             ventapp.apk
+            ventapp-arm64.apk
+            SHA256SUMS
+
+  download-test:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'dl-test-1')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Skapa slumpfiler
+        run: |
+          set -euo pipefail
+          dd if=/dev/urandom of=test-5mb.bin bs=1M count=5 status=none
+          dd if=/dev/urandom of=test-10mb.bin bs=1M count=10 status=none
+          dd if=/dev/urandom of=test-20mb.bin bs=1M count=20 status=none
+          test "$(stat -c%s test-5mb.bin)" = "5242880"
+          test "$(stat -c%s test-10mb.bin)" = "10485760"
+          test "$(stat -c%s test-20mb.bin)" = "20971520"
+          sha256sum test-5mb.bin test-10mb.bin test-20mb.bin | tee SHA256SUMS
+
+      - name: Publicera förhandsrelease dl-test-1
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dl-test-1
+          target_commitish: ${{ github.sha }}
+          name: Nedladdningstest
+          draft: false
+          prerelease: true
+          make_latest: "false"
+          overwrite_files: true
+          files: |
+            test-5mb.bin
+            test-10mb.bin
+            test-20mb.bin
             SHA256SUMS
           body: |
-            Mätprotokoll för Android, versionCode 5. Samma sideload-signatur i fortsättningen (v1+v2).
-            En avinstallation av tidigare fi.nyja.ventapp kan behövas en gång.
-            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-2/ventapp.apk
+            Slumpdata från /dev/urandom för att se vilken filstorlek telefonen kan ladda ner. Ingen personlig information och ingen app.
+            test-5mb.bin är 5 MiB (5242880 byte), test-10mb.bin är 10 MiB (10485760 byte), test-20mb.bin är 20 MiB (20971520 byte).
+            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-5mb.bin
+            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-10mb.bin
+            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-20mb.bin
