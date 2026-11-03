@@ -25,4 +25,8 @@
     <string name="photo_added">Foto tillagt. Tryck på Ta foto igen för nästa ritning.</string>
     <string name="download_later">Nedladdningen kopplas på när avläsningen är riktig.</string>
     <string name="photo_name">Foto %1$d</string>
+    <string name="crash_title">Appen kunde inte öppnas</string>
+    <string name="crash_hint">Kopiera texten och skicka den. En kopia sparas i Nedladdningar som ventapp-crashlog.txt när telefonen tillåter det.</string>
+    <string name="crash_copy">Kopiera</string>
+    <string name="crash_copied">Kopierat.</string>
 </resources>

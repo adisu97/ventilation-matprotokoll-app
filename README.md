@@ -56,9 +56,9 @@ python -m matprotokoll.webapp
 
 ## Android-app (APK, på telefonen)
 
-Debug-signerad sideload-APK: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-2/ventapp.apk
+Debug-signerad sideload-APK: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-3/ventapp.apk
 
-Paket-id är `fi.nyja.ventapp`. **Avinstallera den gamla appen en gång** om telefonen redan har en tidigare test-APK. De byggdes med en ny debug-nyckel vid varje CI-körning, så Android säger "App was not installed" vid uppdatering. Från versionCode 5 används samma nyckel varje gång, och senare APK:er kan installeras ovanpå varandra.
+Paket-id är `fi.nyja.ventapp`, version 1.6 (versionCode 6). Överst på skärmen står versionsnumret. Om appen ändå kraschar vid start visas en felskärm med knappen Kopiera, och texten sparas som `ventapp-crashlog.txt` i Nedladdningar. **Avinstallera den gamla appen en gång** om telefonen har en test-APK äldre än versionCode 5. Från versionCode 5 används samma nyckel varje gång, så version 6 kan installeras ovanpå version 5.
 
 Nyckeln `android-app/signing/ventapp-sideload.keystore` är en **publik engångsnyckel** med lösenordet `ventapp-sideload` i repot. Den finns bara så att sideload-uppdateringar har samma signatur (v1 för Android 5–6 och v2). Den är inte en produktionsnyckel och ska inte användas till något annat.
 

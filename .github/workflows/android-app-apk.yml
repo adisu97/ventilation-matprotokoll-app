@@ -2,7 +2,7 @@ name: Android app-APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, cursor/startup-crash-apk3-82ba]
     paths:
       - "android-app/**"
       - ".github/workflows/android-app-apk.yml"
@@ -49,7 +49,7 @@ jobs:
         working-directory: android-app
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Kontrollera Starta överst och versionCode 4
+      - name: Kontrollera Starta överst och versionCode 6
         run: |
           set -euo pipefail
           APK="android-app/app/build/outputs/apk/debug/app-debug.apk"
@@ -57,7 +57,8 @@ jobs:
           badging="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"
           code="$(printf '%s\n' "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
           echo "versionCode=$code"
-          test "$code" = "5"
+          test "$code" = "6"
+          printf '%s\n' "$badging" | grep -q "launchable-activity: name='fi.nyja.ventapp.MainActivity'"
           mapfile -t layouts < <(unzip -Z1 "$APK" | grep 'activity_main.xml$' || true)
           test "${#layouts[@]}" -ge 1
           for layout in "${layouts[@]}"; do
@@ -113,10 +114,10 @@ jobs:
           grep -q "CN=Ventapp sideload" /tmp/apksign.txt
           sha256sum ventapp.apk | tee SHA256SUMS
 
-      - name: Publicera förhandsrelease app-apk-2
+      - name: Publicera förhandsrelease app-apk-3
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-apk-2
+          tag_name: app-apk-3
           target_commitish: ${{ github.sha }}
           name: Mätprotokoll Android
           draft: false
@@ -127,6 +128,6 @@ jobs:
             ventapp.apk
             SHA256SUMS
           body: |
-            Mätprotokoll för Android, versionCode 5. Samma sideload-signatur i fortsättningen (v1+v2).
-            En avinstallation av tidigare fi.nyja.ventapp kan behövas en gång.
-            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-2/ventapp.apk
+            Mätprotokoll för Android, version 1.6 (versionCode 6). Samma sideload-signatur som version 5 (v1+v2).
+            Versionsnumret syns överst. En krasch vid start visar texten och sparar Nedladdningar/ventapp-crashlog.txt.
+            https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-3/ventapp.apk

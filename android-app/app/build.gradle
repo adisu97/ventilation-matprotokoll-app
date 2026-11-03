@@ -10,8 +10,8 @@ android {
         applicationId "fi.nyja.ventapp"
         minSdk 21
         targetSdk 33
-        versionCode 5
-        versionName "1.5"
+        versionCode 6
+        versionName "1.6"
         ndk {
             abiFilters "armeabi-v7a", "arm64-v8a"
         }
@@ -38,6 +38,10 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+    }
+
+    androidResources {
+        noCompress += ["onnx", "xlsx"]
     }
 
     compileOptions {
