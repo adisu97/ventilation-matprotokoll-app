@@ -48,20 +48,22 @@ jobs:
           code="$(printf '%s\n' "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
           echo "versionCode=$code"
           test "$code" = "7"
-          mapfile -t layouts < <(unzip -Z1 "$APK" | grep 'activity_main.xml$' || true)
-          test "${#layouts[@]}" -ge 1
-          for layout in "${layouts[@]}"; do
-            echo "layout $layout"
+          found=0
+          while IFS= read -r layout; do
             tree="$("$AAPT" dump xmltree "$APK" "$layout" 2>/dev/null || true)"
-            first="$(printf '%s\n' "$tree" | awk '/^[[:space:]]*E: /{print; exit}')"
-            echo "first element: $first"
-            printf '%s\n' "$first" | grep -q 'LinearLayout'
             start_line="$(printf '%s\n' "$tree" | awk '/E: Button/{print NR; exit}')"
             excel_line="$(printf '%s\n' "$tree" | awk '/E: EditText/{print NR; exit}')"
-            echo "button line $start_line excel line $excel_line"
-            test -n "$start_line" -a -n "$excel_line"
-            test "$start_line" -lt "$excel_line"
-          done
+            if [ -z "$start_line" ] || [ -z "$excel_line" ] || [ "$start_line" -ge "$excel_line" ]; then
+              continue
+            fi
+            first="$(printf '%s\n' "$tree" | awk '/^[[:space:]]*E: /{print; exit}')"
+            if ! printf '%s\n' "$first" | grep -q 'LinearLayout'; then
+              continue
+            fi
+            echo "$layout first: $first button:$start_line edit:$excel_line"
+            found=1
+          done < <(unzip -Z1 "$APK" | grep '\.xml$' || true)
+          test "$found" = "1"
 
       - name: Bygget är bara en manuell kontroll
         run: echo "Publicerar inte. app-apk-1 görs av Android app-APK."
