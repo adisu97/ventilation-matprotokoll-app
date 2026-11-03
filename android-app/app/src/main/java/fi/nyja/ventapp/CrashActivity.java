@@ -16,6 +16,7 @@ public class CrashActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_crash);
+        SystemBarInsets.apply(this, R.id.crashRoot);
         String text = getIntent().getStringExtra(EXTRA_TEXT);
         if (text == null || text.length() == 0) {
             text = CrashLog.read(this);

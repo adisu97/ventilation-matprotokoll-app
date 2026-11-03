@@ -149,15 +149,15 @@ public final class CrashLog {
                     }
                 }
             } else {
-                File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                if (dir.isDirectory() || dir.mkdirs()) {
+                File dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (dir != null && (dir.isDirectory() || dir.mkdirs())) {
                     FileOutputStream out = new FileOutputStream(new File(dir, FILE_NAME));
                     try {
                         out.write(bytes);
                     } finally {
                         out.close();
                     }
-                    where = "Downloads/" + FILE_NAME;
+                    where = dir.getAbsolutePath() + "/" + FILE_NAME;
                 }
             }
         } catch (Exception ignored) {

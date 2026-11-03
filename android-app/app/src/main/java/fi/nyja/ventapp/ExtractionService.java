@@ -85,7 +85,11 @@ public class ExtractionService extends Service {
                 } finally {
                     STATE.running = false;
                     notifyListeners();
-                    stopForeground(true);
+                    if (Build.VERSION.SDK_INT >= 24) {
+                        stopForeground(STOP_FOREGROUND_REMOVE);
+                    } else {
+                        stopForeground(true);
+                    }
                     stopSelf();
                 }
             }

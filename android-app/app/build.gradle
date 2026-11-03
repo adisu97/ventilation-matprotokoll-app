@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace "fi.nyja.ventapp"
-    compileSdk 33
+    compileSdk 35
 
     defaultConfig {
         applicationId "fi.nyja.ventapp"
         minSdk 21
-        targetSdk 33
-        versionCode 6
-        versionName "1.6"
+        targetSdk 35
+        versionCode 7
+        versionName "1.7"
     }
 
     flavorDimensions "abi"
@@ -45,6 +45,10 @@ android {
         debug {
             signingConfig signingConfigs.sideload
         }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.sideload
+        }
     }
 
     packaging {
@@ -60,7 +64,7 @@ android {
 }
 
 dependencies {
-    implementation "androidx.core:core:1.9.0"
+    implementation "androidx.core:core:1.15.0"
     implementation "com.microsoft.onnxruntime:onnxruntime-android:1.19.2"
     testImplementation "junit:junit:4.13.2"
 }

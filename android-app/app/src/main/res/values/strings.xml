@@ -21,6 +21,7 @@
     <string name="drawings_required">Välj minst en PDF eller ta ett foto.</string>
     <string name="no_camera">Hittar ingen kamera-app.</string>
     <string name="camera_denied">Kameran behöver tillstånd för att ta foto.</string>
+    <string name="notifications_denied">Aviseringar är avstängda. Avläsningen körs ändå, men telefonen kanske inte visar förloppet.</string>
     <string name="photo_failed">Fotot kunde inte sparas.</string>
     <string name="photo_added">Foto tillagt. Tryck på Ta foto igen för nästa ritning.</string>
     <string name="download_later">Nedladdningen kopplas på när avläsningen är riktig.</string>
