@@ -19,6 +19,14 @@
             <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
         </intent>
         <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/pdf" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="image/*" />
+        </intent>
+        <intent>
             <action android:name="android.intent.action.OPEN_DOCUMENT" />
             <data android:mimeType="*/*" />
         </intent>
@@ -51,6 +59,10 @@
             android:name=".CrashActivity"
             android:exported="false"
             android:process=":crash" />
+
+        <activity
+            android:name=".PreviewActivity"
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

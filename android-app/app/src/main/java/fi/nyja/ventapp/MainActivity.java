@@ -520,6 +520,17 @@ public class MainActivity extends Activity {
         View row = getLayoutInflater().inflate(R.layout.item_drawing, fileList, false);
         TextView name = row.findViewById(R.id.drawingName);
         name.setText(entry.name);
+        row.findViewById(R.id.viewFile).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent preview = new Intent(MainActivity.this, PreviewActivity.class);
+                preview.putExtra(PreviewActivity.EXTRA_URI, entry.uri);
+                preview.putExtra(PreviewActivity.EXTRA_KIND, entry.kind);
+                preview.putExtra(PreviewActivity.EXTRA_PATH, entry.photoPath);
+                preview.putExtra(PreviewActivity.EXTRA_NAME, entry.name);
+                startActivity(preview);
+            }
+        });
         row.findViewById(R.id.remove).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

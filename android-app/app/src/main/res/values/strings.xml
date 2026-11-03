@@ -8,6 +8,13 @@
     <string name="list_heading">Valda ritningar</string>
     <string name="empty_list">Inga ritningar valda ännu.</string>
     <string name="remove">Ta bort</string>
+    <string name="view_file">Visa fil</string>
+    <string name="close_preview">Stäng</string>
+    <string name="no_viewer">Ingen app kan visa den här filen.</string>
+    <string name="preview_failed">Filen kunde inte visas.</string>
+    <string name="page_label">Sida %1$d av %2$d</string>
+    <string name="prev_page">Föregående</string>
+    <string name="next_page">Nästa</string>
     <string name="append_existing">Lägg till i befintlig Excel-fil (ny flik)</string>
     <string name="new_workbook_hint">Ny Excel-fil från namnet ovan, ett blad per ritning.</string>
     <string name="existing_chosen">Vald fil: %1$s</string>
