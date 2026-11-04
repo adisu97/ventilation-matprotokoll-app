@@ -149,6 +149,19 @@ public class MainActivity extends Activity {
                 takePhoto();
             }
         });
+        findViewById(R.id.showOcr).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String text = ExtractionService.state().debug;
+                if (text == null || text.trim().length() == 0) {
+                    Toast.makeText(MainActivity.this, R.string.ocr_empty, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                Intent view = new Intent(MainActivity.this, OcrLogActivity.class);
+                view.putExtra(OcrLogActivity.EXTRA_TEXT, text);
+                startActivity(view);
+            }
+        });
         findViewById(R.id.ventNames).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

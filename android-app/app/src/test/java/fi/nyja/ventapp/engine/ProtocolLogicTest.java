@@ -37,6 +37,40 @@ public class ProtocolLogicTest {
     }
 
     @Test
+    public void fuzzyNameSurvivesOneOcrSubstitution() {
+        Vent misread = LabelParser.parse("DVKH 200 +40", 0, 0, 0.8);
+        assertNotNull(misread);
+        assertEquals("dykh", misread.canonicalName());
+        assertEquals("supply", misread.kind);
+        assertEquals("200", misread.size);
+        Vent shortName = LabelParser.parse("HEK-125 -15", 0, 0, 0.8);
+        assertNotNull(shortName);
+        assertEquals("hfk", shortName.canonicalName());
+        assertEquals("exhaust", shortName.kind);
+    }
+
+    @Test
+    public void rotatedPointMapsBack() {
+        double[] rotated = OcrGeometry.rotateClockwise(10, 4, 30, 20, 90);
+        double[] back = OcrGeometry.unmapClockwise(rotated[0], rotated[1], 30, 20, 90);
+        assertEquals(10, back[0], 0.01);
+        assertEquals(4, back[1], 0.01);
+        double[] turned = OcrGeometry.rotateClockwise(10, 4, 30, 20, 270);
+        double[] home = OcrGeometry.unmapClockwise(turned[0], turned[1], 30, 20, 270);
+        assertEquals(10, home[0], 0.01);
+        assertEquals(4, home[1], 0.01);
+    }
+
+    @Test
+    public void nearbyFragmentsBecomeOneLabel() {
+        OcrToken name = new OcrToken("DYKH", 10, 20, 0.8, 18, 6);
+        OcrToken size = new OcrToken("200", 28, 20, 0.8, 12, 6);
+        java.util.List<OcrToken> merged = TokenCleanup.prepare(java.util.Arrays.asList(size, name));
+        assertEquals(1, merged.size());
+        assertEquals("DYKH 200", merged.get(0).text);
+    }
+
+    @Test
     public void userAddedNameIsUsedAndOcrIsTolerant() {
         VentCatalog previous = LabelParser.current();
         try {

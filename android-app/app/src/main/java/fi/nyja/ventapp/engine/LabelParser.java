@@ -53,27 +53,36 @@ public final class LabelParser {
         }
         String norm = normalize(raw);
         Matcher match = catalog.productPattern().matcher(norm);
-        if (!match.find()) {
-            return null;
-        }
-        String token = match.group(2).toUpperCase(Locale.ROOT);
-        String name = catalog.storeName(token);
-        if ("hu".equals(name) && !token.startsWith("HUK")
-                && (norm.matches(".*[A-Z]HU.*") || norm.matches(".*HU[A-Z].*"))) {
-            return null;
-        }
+        String token;
+        String name;
+        String rest;
         int qty = 1;
-        if (match.group(1) != null) {
-            try {
-                qty = Integer.parseInt(match.group(1));
-            } catch (NumberFormatException ignored) {
-                qty = 1;
+        if (match.find()) {
+            token = match.group(2).toUpperCase(Locale.ROOT);
+            name = catalog.storeName(token);
+            if ("hu".equals(name) && !token.startsWith("HUK")
+                    && (norm.matches(".*[A-Z]HU.*") || norm.matches(".*HU[A-Z].*"))) {
+                return null;
             }
+            if (match.group(1) != null) {
+                try {
+                    qty = Integer.parseInt(match.group(1));
+                } catch (NumberFormatException ignored) {
+                    qty = 1;
+                }
+            }
+            rest = norm.substring(match.end());
+        } else {
+            VentCatalog.Hit hit = catalog.fuzzyHit(norm);
+            if (hit == null) {
+                return null;
+            }
+            name = catalog.storeName(hit.key);
+            rest = norm.substring(Math.min(hit.end, norm.length()));
         }
         if (qty < 1 || qty > 12) {
             qty = 1;
         }
-        String rest = norm.substring(match.end());
         String size = sizeFromRest(rest, name);
         Double airflow = null;
         boolean signed = false;

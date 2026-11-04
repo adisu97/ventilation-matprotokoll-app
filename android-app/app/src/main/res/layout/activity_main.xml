@@ -218,6 +218,12 @@
                 android:layout_marginTop="@dimen/gap"
                 android:enabled="false"
                 android:text="@string/download" />
+
+            <Button
+                android:id="@+id/showOcr"
+                style="@style/SecondaryButton"
+                android:layout_marginTop="@dimen/gap"
+                android:text="@string/show_ocr" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

@@ -54,6 +54,7 @@ public class ExtractionService extends Service {
         STATE.done = false;
         STATE.error = null;
         STATE.notes = new ArrayList<String>();
+        STATE.debug = "";
         STATE.xlsx = null;
         STATE.filename = excel;
         STATE.startedAt = android.os.SystemClock.elapsedRealtime();
@@ -78,6 +79,7 @@ public class ExtractionService extends Service {
                             });
                     STATE.xlsx = outcome.xlsx;
                     STATE.notes = outcome.notes;
+                    STATE.debug = outcome.debug;
                     STATE.done = true;
                 } catch (Exception ex) {
                     STATE.error = ex.getMessage() == null ? "Avläsningen misslyckades." : ex.getMessage();
@@ -132,6 +134,7 @@ public class ExtractionService extends Service {
         public volatile String currentName = "";
         public volatile String error;
         public volatile String filename = SheetNames.workbookFileName("matprotokoll");
+        public volatile String debug = "";
         public volatile byte[] xlsx;
         public volatile List<String> notes = new ArrayList<String>();
         public volatile long startedAt;

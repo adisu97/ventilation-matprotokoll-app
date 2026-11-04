@@ -235,6 +235,45 @@ public final class VentCatalog {
         return false;
     }
 
+    public static final class Hit {
+        public final String key;
+        public final int end;
+
+        Hit(String key, int end) {
+            this.key = key;
+            this.end = end;
+        }
+    }
+
+    /** Unique nearest name inside OCR text. Length >= 4 may differ by one character. */
+    public Hit fuzzyHit(String norm) {
+        if (norm == null || norm.isEmpty()) {
+            return null;
+        }
+        String folded = fold(norm);
+        String bestKey = null;
+        int bestEnd = 0;
+        for (Spec spec : specs.values()) {
+            if (!spec.tilluftOn && !spec.franluftOn) {
+                continue;
+            }
+            String name = fold(spec.key);
+            for (int i = 0; i + name.length() <= folded.length(); i++) {
+                if (!folded.substring(i, i + name.length()).equals(name)) {
+                    continue;
+                }
+                if (bestKey == null || spec.key.length() > bestKey.length()) {
+                    bestKey = spec.key;
+                    bestEnd = i + spec.key.length();
+                }
+            }
+        }
+        if (bestKey == null) {
+            return null;
+        }
+        return new Hit(bestKey, bestEnd);
+    }
+
     public Pattern productPattern() {
         return productPattern;
     }
@@ -356,6 +395,12 @@ public final class VentCatalog {
                 c = 'O';
             } else if (c == '1' || c == 'L') {
                 c = 'I';
+            } else if (c == 'V') {
+                c = 'Y';
+            } else if (c == 'F') {
+                c = 'E';
+            } else if (c == '5') {
+                c = 'S';
             }
             out.append(c);
         }
@@ -402,8 +447,14 @@ public final class VentCatalog {
             char c = key.charAt(i);
             if (c == 'O') {
                 out.append("[O0]");
-            } else if (c == 'I') {
-                out.append("[I1L]");
+            } else if (c == 'I' || c == 'L') {
+                out.append("[IL1]");
+            } else if (c == 'Y' || c == 'V') {
+                out.append("[YV]");
+            } else if (c == 'E' || c == 'F') {
+                out.append("[EF]");
+            } else if (c == 'S') {
+                out.append("[S5]");
             } else if (c == '-') {
                 out.append("\\-");
             } else {
