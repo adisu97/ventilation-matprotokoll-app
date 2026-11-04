@@ -68,7 +68,7 @@ public final class DrawingExtractor {
                                 progress.onProgress(index, count, fraction, entry.name);
                             }
                         }
-                    }, debug);
+                    }, debug, notes);
                     List<Room> rooms = ProtocolBuilder.roomsFromTokens(tokens);
                     List<Vent> vents = ProtocolBuilder.ventsFromTokens(tokens);
                     debug.append("rum=").append(rooms.size()).append(" don=").append(vents.size()).append("\n\n");
@@ -105,7 +105,7 @@ public final class DrawingExtractor {
     }
 
     private static List<OcrToken> readDrawing(Context context, PpOcr ocr, DrawingEntry entry, TileProgress progress,
-            StringBuilder debug) throws Exception {
+            StringBuilder debug, List<String> notes) throws Exception {
         debug.append("== ").append(entry.name == null ? "ritning" : entry.name).append("\n");
         List<OcrToken> tokens;
         if (DrawingEntry.KIND_PHOTO.equals(entry.kind) && entry.photoPath != null) {
@@ -119,7 +119,7 @@ public final class DrawingExtractor {
                     throw new IllegalStateException("Kunde inte öppna PDF:en.");
                 }
                 try {
-                    tokens = readPdf(ocr, fd, progress, debug);
+                    tokens = readPdf(context, ocr, fd, progress, debug, notes, entry.name);
                 } finally {
                     fd.close();
                 }
@@ -178,11 +178,43 @@ public final class DrawingExtractor {
         return readTiled(ocr, bitmap, pointsPerPixel, 0, progress, debug);
     }
 
-    private static List<OcrToken> readPdf(PpOcr ocr, ParcelFileDescriptor fd, TileProgress progress, StringBuilder debug)
-            throws Exception {
-        PdfRenderer renderer = new PdfRenderer(fd);
+    private static List<OcrToken> readPdf(Context context, PpOcr ocr, ParcelFileDescriptor fd, TileProgress progress,
+            StringBuilder debug, List<String> notes, String drawingName) throws Exception {
         List<OcrToken> tokens = new ArrayList<OcrToken>();
+        String label = drawingName == null ? "PDF" : drawingName;
         try {
+            ParcelFileDescriptor copy = fd.dup();
+            byte[] pdf;
+            try {
+                java.io.FileInputStream in = new java.io.FileInputStream(copy.getFileDescriptor());
+                try {
+                    pdf = readAll(in);
+                } finally {
+                    in.close();
+                }
+            } finally {
+                copy.close();
+            }
+            PdfTextLayer.Result text = PdfTextLayer.read(context, pdf);
+            if (text.error != null) {
+                String message = label + ": textlagret kunde inte läsas: " + text.error;
+                notes.add(message);
+                debug.append(message).append("\n");
+            } else {
+                tokens.addAll(text.tokens);
+                debug.append("textlager: ").append(text.tokens.size()).append(" ord\n");
+                if (text.tokens.isEmpty()) {
+                    notes.add(label + ": PDF:en har inget textlager. Rum och don söks med OCR.");
+                }
+            }
+        } catch (Exception ex) {
+            String message = label + ": textlagret kunde inte läsas: " + message(ex);
+            notes.add(message);
+            debug.append(message).append("\n");
+        }
+        try {
+            PdfRenderer renderer = new PdfRenderer(fd);
+            try {
             int pages = renderer.getPageCount();
             for (int p = 0; p < pages; p++) {
                 PdfRenderer.Page page = renderer.openPage(p);
@@ -222,8 +254,14 @@ public final class DrawingExtractor {
                             matrix.setScale(scale, scale);
                             matrix.postTranslate(-ox, -oy);
                             page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                            if (!mostlyBlank(bitmap)) {
-                                tokens.addAll(readAngles(ocr, bitmap, ox / scale, oy / scale + yShift, scale));
+                            try {
+                                if (!mostlyBlank(bitmap)) {
+                                    tokens.addAll(readAngles(ocr, bitmap, ox / scale, oy / scale + yShift, scale));
+                                }
+                            } catch (Exception ex) {
+                                String message = label + ": OCR-rutan misslyckades: " + message(ex);
+                                notes.add(message);
+                                debug.append(message).append("\n");
                             }
                             bitmap.recycle();
                             if (progress != null) {
@@ -235,8 +273,13 @@ public final class DrawingExtractor {
                     page.close();
                 }
             }
-        } finally {
-            renderer.close();
+            } finally {
+                renderer.close();
+            }
+        } catch (Exception ex) {
+            String message = label + ": sidan kunde inte ritas: " + message(ex);
+            notes.add(message);
+            debug.append(message).append("\n");
         }
         return tokens;
     }

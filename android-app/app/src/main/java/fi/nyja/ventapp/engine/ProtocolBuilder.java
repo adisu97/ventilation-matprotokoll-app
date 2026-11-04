@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 public final class ProtocolBuilder {
     private static final Pattern ROOM_NUM = Pattern.compile("^[A-ZÅÄÖ][0-9]{2,4}[A-Za-z]{0,2}$");
     private static final Pattern PLAIN_ROOM = Pattern.compile("^\\d{3}[A-Za-z]?$");
+    private static final Pattern ROOM_INSIDE = Pattern.compile("(?<![A-ZÅÄÖ0-9])([A-ZÅÄÖ][0-9]{2,4}[A-Za-z]{0,2})(?![A-ZÅÄÖ0-9])");
     private static final double AIR_DIST = 18.0;
     private static final double VENT_DEDUPE = 12.0;
     private static final double ROOM_DIST = 220.0;
@@ -24,14 +25,16 @@ public final class ProtocolBuilder {
         for (int i = 0; i < tokens.size(); i++) {
             OcrToken token = tokens.get(i);
             String text = token.text.trim();
-            if (!ROOM_NUM.matcher(text).matches() && !PLAIN_ROOM.matcher(text).matches()) {
+            String roomNum = roomNumber(text);
+            if (roomNum == null) {
                 continue;
             }
-            if (LabelParser.parse(text, token.x, token.y, token.confidence) != null) {
+            if (roomNum.equalsIgnoreCase(text)
+                    && LabelParser.parse(text, token.x, token.y, token.confidence) != null) {
                 continue;
             }
             String name = nearbyName(tokens, token);
-            rooms.add(new Room(text, name, token.x, token.y, token.confidence));
+            rooms.add(new Room(roomNum, name, token.x, token.y, token.confidence));
         }
         return rooms;
     }
@@ -255,6 +258,21 @@ public final class ProtocolBuilder {
         String left = a == null ? "" : a;
         String right = b == null ? "" : b;
         return left.equals(right);
+    }
+
+    static String roomNumber(String text) {
+        if (text == null) {
+            return null;
+        }
+        String trimmed = text.trim().toUpperCase(Locale.ROOT);
+        if (ROOM_NUM.matcher(trimmed).matches() || PLAIN_ROOM.matcher(trimmed).matches()) {
+            return trimmed;
+        }
+        java.util.regex.Matcher inside = ROOM_INSIDE.matcher(trimmed);
+        if (inside.find()) {
+            return inside.group(1);
+        }
+        return null;
     }
 
     private static String nearbyName(List<OcrToken> tokens, OcrToken room) {

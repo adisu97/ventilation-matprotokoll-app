@@ -10,8 +10,8 @@ android {
         applicationId "fi.nyja.ventapp"
         minSdk 21
         targetSdk 35
-        versionCode 10
-        versionName "1.10"
+        versionCode 11
+        versionName "1.11"
     }
 
     flavorDimensions "abi"
@@ -66,6 +66,7 @@ android {
 dependencies {
     implementation "androidx.core:core:1.15.0"
     implementation "com.microsoft.onnxruntime:onnxruntime-android:1.19.2"
+    implementation "com.tom-roush:pdfbox-android:2.0.27.0"
     testImplementation "junit:junit:4.13.2"
 }
 

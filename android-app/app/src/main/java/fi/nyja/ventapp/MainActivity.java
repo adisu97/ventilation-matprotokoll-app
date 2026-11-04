@@ -626,7 +626,16 @@ public class MainActivity extends Activity {
             done = true;
             percentView.setText("100 %");
             progressBar.setProgress(100);
-            statusView.setText("Klar");
+            boolean problem = false;
+            if (state.notes != null) {
+                for (String note : state.notes) {
+                    if (note.contains("inga rumsnummer") || note.contains("inga kända don")
+                            || note.contains("kunde inte") || note.contains("inget textlager")) {
+                        problem = true;
+                    }
+                }
+            }
+            statusView.setText(problem ? "Inga rum eller don" : "Klar");
             etaView.setText("Beräknad tid kvar: 0:00");
             downloadButton.setEnabled(true);
             refreshStartState();
@@ -717,8 +726,12 @@ public class MainActivity extends Activity {
         if (nameOk) {
             excelName.setError(null);
         }
+        boolean keepResult = done && ExtractionService.state().notes != null
+                && !ExtractionService.state().notes.isEmpty();
         if (nameOk && drawingsOk) {
-            formError.setText("");
+            if (!keepResult) {
+                formError.setText("");
+            }
         } else if (!nameOk && !drawingsOk) {
             formError.setText(R.string.need_name_and_drawings);
         } else if (!nameOk) {

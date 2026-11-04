@@ -20,6 +20,17 @@ import static org.junit.Assert.assertTrue;
 
 public class ProtocolLogicTest {
     @Test
+    public void roomNumberCanSitInsideALongerLine() {
+        assertEquals("E125", ProtocolBuilder.roomNumber("E125 WC"));
+        assertEquals("E125WC", ProtocolBuilder.roomNumber("e125wc"));
+        assertNull(ProtocolBuilder.roomNumber("KSO-125"));
+        java.util.List<Room> rooms = ProtocolBuilder.roomsFromTokens(
+                java.util.Collections.singletonList(new OcrToken("E125 WC", 10, 20, 1)));
+        assertEquals(1, rooms.size());
+        assertEquals("E125", rooms.get(0).number);
+    }
+
+    @Test
     public void parsesExhaustAndSupplyLabels() {
         Vent exhaust = LabelParser.parse("KSO-125 -20", 10, 20, 0.9);
         assertNotNull(exhaust);
