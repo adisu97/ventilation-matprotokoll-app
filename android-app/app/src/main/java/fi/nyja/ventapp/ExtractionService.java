@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 
@@ -84,7 +85,11 @@ public class ExtractionService extends Service {
                 } finally {
                     STATE.running = false;
                     notifyListeners();
-                    stopForeground(true);
+                    if (Build.VERSION.SDK_INT >= 24) {
+                        stopForeground(STOP_FOREGROUND_REMOVE);
+                    } else {
+                        stopForeground(true);
+                    }
                     stopSelf();
                 }
             }
@@ -102,9 +107,13 @@ public class ExtractionService extends Service {
             Notification notification = new Notification.Builder(this, channel)
                     .setContentTitle("Läser ritningar")
                     .setContentText("Mätprotokoll arbetar.")
-                    .setSmallIcon(android.R.drawable.stat_sys_download)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
                     .build();
-            startForeground(7, notification);
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(7, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            } else {
+                startForeground(7, notification);
+            }
         }
     }
 

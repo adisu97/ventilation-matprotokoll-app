@@ -15,6 +15,7 @@ import java.util.zip.ZipInputStream;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ProtocolLogicTest {
@@ -33,6 +34,36 @@ public class ProtocolLogicTest {
         assertEquals("supply", supply.kind);
         assertEquals(2, supply.qty);
         assertEquals("160", supply.size);
+    }
+
+    @Test
+    public void userAddedNameIsUsedAndOcrIsTolerant() {
+        VentCatalog previous = LabelParser.current();
+        try {
+            assertEquals("Skriv ett namn.", VentCatalog.defaults().rejection("  ", true));
+            assertEquals("Namnet finns redan.", VentCatalog.defaults().rejection("kso", false));
+            VentCatalog custom = VentCatalog.defaults().add(" nova ", true);
+            assertEquals("Namnet finns redan.", custom.rejection("NOVA", true));
+            LabelParser.use(custom);
+            Vent added = LabelParser.parse("N0VA-125 +30", 1, 2, 0.8);
+            assertNotNull(added);
+            assertEquals("nova", added.canonicalName());
+            assertEquals("supply", added.kind);
+            assertEquals("125", added.size);
+            assertEquals(30.0, added.airflow, 0.01);
+
+            LabelParser.use(custom.setEnabled("KSO", false, false));
+            assertNull(LabelParser.parse("KSO-125 -20", 0, 0, 1));
+
+            VentCatalog restored = VentCatalog.fromJson(custom.toJson());
+            LabelParser.use(restored);
+            Vent again = LabelParser.parse("nova-160", 0, 0, 1);
+            assertNotNull(again);
+            assertEquals("nova", again.canonicalName());
+            assertEquals("supply", again.kind);
+        } finally {
+            LabelParser.use(previous);
+        }
     }
 
     @Test
