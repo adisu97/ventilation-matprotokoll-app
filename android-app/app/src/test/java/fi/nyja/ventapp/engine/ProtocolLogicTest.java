@@ -258,6 +258,79 @@ public class ProtocolLogicTest {
     }
 
     @Test
+    public void lockzoneAndExcaUseTheDefaultListAndTheVentColumns() throws Exception {
+        boolean supply = false;
+        boolean extract = false;
+        for (VentCatalog.Row row : VentCatalog.defaults().tilluftRows()) {
+            if ("LOCKZONE".equals(row.key) && row.builtin && row.enabled) {
+                supply = true;
+            }
+        }
+        for (VentCatalog.Row row : VentCatalog.defaults().franluftRows()) {
+            if ("EXCA".equals(row.key) && row.builtin && row.enabled) {
+                extract = true;
+            }
+        }
+        assertTrue(supply);
+        assertTrue(extract);
+
+        Vent glued = LabelParser.parse("2xLOCKZONE", 0, 0, 1);
+        assertNotNull(glued);
+        assertEquals("lockzone", glued.canonicalName());
+        assertEquals("supply", glued.kind);
+        assertEquals(2, glued.qty);
+        Vent spaced = LabelParser.parse("2 x EXCA", 0, 0, 1);
+        assertNotNull(spaced);
+        assertEquals("exca", spaced.canonicalName());
+        assertEquals("exhaust", spaced.kind);
+        assertEquals(2, spaced.qty);
+        Vent sized = LabelParser.parse("L0CKZ0NE-125-C +40", 0, 0, 1);
+        assertNotNull(sized);
+        assertEquals("lockzone", sized.canonicalName());
+        assertEquals("supply", sized.kind);
+        assertEquals("125", sized.size);
+        assertEquals(40.0, sized.airflow, 0.01);
+        Vent exca = LabelParser.parse("2x EXCA-100 -15", 0, 0, 1);
+        assertNotNull(exca);
+        assertEquals("exca", exca.canonicalName());
+        assertEquals("exhaust", exca.kind);
+        assertEquals(2, exca.qty);
+        assertEquals("100", exca.size);
+        assertEquals(15.0, exca.airflow, 0.01);
+
+        List<ProtocolRow> rows = ProtocolBuilder.pair(
+                Collections.singletonList(new Room("E125", "WC", 0, 0, 1)),
+                Arrays.asList(glued, spaced));
+        assertEquals(2, rows.size());
+        assertEquals("lockzone", rows.get(0).supplyName);
+        assertEquals("exca", rows.get(0).exhaustName);
+        assertEquals("", rows.get(1).room);
+        assertEquals("lockzone", rows.get(1).supplyName);
+        assertEquals("exca", rows.get(1).exhaustName);
+
+        File template = new File("../../templates/matprotokoll_grund.xlsx");
+        if (!template.isFile()) {
+            template = new File("../templates/matprotokoll_grund.xlsx");
+        }
+        byte[] xlsx = ProtocolXlsx.build(
+                java.nio.file.Files.readAllBytes(template.toPath()),
+                Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", rows)),
+                true);
+        String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
+        assertTrue(cellWindow(plan, "C2").contains(">exca</t>"));
+        assertTrue(cellWindow(plan, "I2").contains(">lockzone</t>"));
+        assertTrue(cellWindow(plan, "C3").contains(">exca</t>"));
+        assertTrue(cellWindow(plan, "I3").contains(">lockzone</t>"));
+        assertFalse(plan.contains("r=\"A3\""));
+    }
+
+    private static String cellWindow(String sheet, String ref) {
+        int at = sheet.indexOf("r=\"" + ref + "\"");
+        assertTrue(ref, at >= 0);
+        return sheet.substring(at, Math.min(sheet.length(), at + 180));
+    }
+
+    @Test
     public void parsesExhaustAndSupplyLabels() {
         Vent exhaust = LabelParser.parse("KSO-125 -20", 10, 20, 0.9);
         assertNotNull(exhaust);

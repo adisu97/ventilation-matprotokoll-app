@@ -74,9 +74,11 @@ public final class VentCatalog {
         addBuiltin(specs, "CLIK", true, true);
         addBuiltin(specs, "KTS", true, false);
         addBuiltin(specs, "EAGLE", true, false);
+        addBuiltin(specs, "LOCKZONE", true, false);
         addBuiltin(specs, "PELICAN", true, false);
         addBuiltin(specs, "HFK", true, true);
         addBuiltin(specs, "KSO", false, true);
+        addBuiltin(specs, "EXCA", false, true);
         addBuiltin(specs, "ALG", false, true);
         addBuiltin(specs, "PRA", false, true);
         addBuiltin(specs, "HUK", false, true);
