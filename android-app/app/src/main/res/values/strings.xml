@@ -5,6 +5,16 @@
     <string name="excel_hint">t.ex. matprotokoll.xlsx</string>
     <string name="pick_pdfs">Välj PDF-ritningar</string>
     <string name="take_photo">Ta foto</string>
+    <string name="vent_names">Ventilnamn</string>
+    <string name="vent_names_title">Ventilnamn</string>
+    <string name="vent_count">Aktiva namn: %1$d</string>
+    <string name="tilluft">Tilluft</string>
+    <string name="franluft">Frånluft</string>
+    <string name="add_vent">Lägg till</string>
+    <string name="new_vent_hint">Nytt namn</string>
+    <string name="reset_names">Återställ standard</string>
+    <string name="builtin_name">Standard</string>
+    <string name="custom_name">Eget namn</string>
     <string name="list_heading">Valda ritningar</string>
     <string name="empty_list">Inga ritningar valda ännu.</string>
     <string name="remove">Ta bort</string>

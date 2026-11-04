@@ -10,4 +10,10 @@ public class VentApp extends Application {
         super.attachBaseContext(base);
         CrashLog.install(this);
     }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        VentNameStore.load(this);
+    }
 }

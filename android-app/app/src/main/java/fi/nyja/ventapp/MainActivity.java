@@ -149,6 +149,12 @@ public class MainActivity extends Activity {
                 takePhoto();
             }
         });
+        findViewById(R.id.ventNames).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, VentNamesActivity.class));
+            }
+        });
         findViewById(R.id.appendLabel).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

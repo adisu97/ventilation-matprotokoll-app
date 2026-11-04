@@ -2,7 +2,7 @@ name: Android app-APK
 
 on:
   push:
-    branches: [main, cursor/preview-contrast-apk5-82ba]
+    branches: [main, cursor/vent-names-apk6-82ba]
     paths:
       - "android-app/**"
       - ".github/workflows/android-app-apk.yml"
@@ -49,7 +49,7 @@ jobs:
         working-directory: android-app
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Kontrollera Starta överst och versionCode 8
+      - name: Kontrollera Starta överst och versionCode 9
         run: |
           set -euo pipefail
           APK="android-app/app/build/outputs/apk/universal/release/app-universal-release.apk"
@@ -57,7 +57,7 @@ jobs:
           badging="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"
           code="$(printf '%s\n' "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
           echo "versionCode=$code"
-          test "$code" = "8"
+          test "$code" = "9"
           printf '%s\n' "$badging" | grep -F "fi.nyja.ventapp.MainActivity" >/dev/null
           found=0
           while IFS= read -r layout; do
@@ -106,7 +106,7 @@ jobs:
             badging="$("$AAPT" dump badging "$out" 2>/dev/null || true)"
             printf '%s\n' "$badging" | grep -q "sdkVersion:'21'"
             printf '%s\n' "$badging" | grep -q "targetSdkVersion:'35'"
-            printf '%s\n' "$badging" | grep -q "versionCode='8'"
+            printf '%s\n' "$badging" | grep -q "versionCode='9'"
             printf '%s\n' "$badging" | grep -q "name='fi.nyja.ventapp'"
             if printf '%s\n' "$badging" | grep -q "application-debuggable"; then
               echo "debuggable APK: $out" >&2
@@ -145,22 +145,22 @@ jobs:
           ls -l ventapp.apk ventapp-arm64.apk
           sha256sum ventapp.apk ventapp-arm64.apk | tee SHA256SUMS
           cat > release-body.md << EOF
-          Mätprotokoll för Android, version 1.8 (versionCode 8), targetSdk 35. Signerad med v1+v2+v3 och samma sideload-nyckel som version 5.
+          Mätprotokoll för Android, version 1.9 (versionCode 9), targetSdk 35. Signerad med v1+v2+v3 och samma sideload-nyckel som version 5.
 
           ventapp-arm64.apk ($(stat -c%s ventapp-arm64.apk) byte) är den mindre filen, bara arm64-v8a, för telefoner som Galaxy A52.
           ventapp.apk ($(stat -c%s ventapp.apk) byte) innehåller arm64-v8a och armeabi-v7a.
 
-          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-5/ventapp-arm64.apk
-          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-5/ventapp.apk
+          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-6/ventapp-arm64.apk
+          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-6/ventapp.apk
 
           Versionsnumret syns överst. En krasch vid start visar texten och sparar Nedladdningar/ventapp-crashlog.txt.
           EOF
           sed -i 's/^          //' release-body.md
 
-      - name: Publicera förhandsrelease app-apk-5
+      - name: Publicera förhandsrelease app-apk-6
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-apk-5
+          tag_name: app-apk-6
           target_commitish: ${{ github.sha }}
           name: Mätprotokoll Android
           draft: false

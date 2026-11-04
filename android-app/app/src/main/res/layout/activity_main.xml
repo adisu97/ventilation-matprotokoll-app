@@ -144,6 +144,12 @@
                     android:layout_marginTop="@dimen/gap"
                     android:text="@string/take_photo" />
 
+                <Button
+                    android:id="@+id/ventNames"
+                    style="@style/SecondaryButton"
+                    android:layout_marginTop="@dimen/gap"
+                    android:text="@string/vent_names" />
+
                 <LinearLayout
                     android:id="@+id/appendRow"
                     android:layout_width="match_parent"
