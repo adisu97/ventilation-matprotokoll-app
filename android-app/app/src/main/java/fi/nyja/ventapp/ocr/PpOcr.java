@@ -13,6 +13,7 @@ import java.util.List;
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtSession;
+import fi.nyja.ventapp.engine.LatinScript;
 import fi.nyja.ventapp.engine.OcrToken;
 
 /** PP-OCRv4 det + rec. Models are the Apache-2.0 PaddleOCR weights shipped in assets. */
@@ -48,7 +49,7 @@ public final class PpOcr implements AutoCloseable {
         int rw = width;
         int rh = height;
         float scale = 1f;
-        int maxSide = 640;
+        int maxSide = 960;
         if (Math.max(width, height) > maxSide) {
             scale = maxSide / (float) Math.max(width, height);
             rw = Math.max(32, Math.round(width * scale / 32f) * 32);
@@ -67,20 +68,20 @@ public final class PpOcr implements AutoCloseable {
         List<OcrToken> tokens = new ArrayList<OcrToken>();
         float backX = width / (float) rw;
         float backY = height / (float) rh;
-        int limit = Math.min(boxes.size(), 48);
+        int limit = Math.min(boxes.size(), 240);
         for (int i = 0; i < limit; i++) {
             int[] box = boxes.get(i);
             int x0 = clamp((int) (box[0] * backX) - 2, 0, width - 1);
             int y0 = clamp((int) (box[1] * backY) - 2, 0, height - 1);
             int x1 = clamp((int) (box[2] * backX) + 2, x0 + 1, width);
             int y1 = clamp((int) (box[3] * backY) + 2, y0 + 1, height);
-            String text = recognize(px, width, x0, y0, x1, y1);
+            String text = LatinScript.clean(recognize(px, width, x0, y0, x1, y1));
             if (text.length() < 2) {
                 continue;
             }
             double cx = (originX + (x0 + x1) / 2f) / pixelsPerPoint;
             double cy = (originY + (y0 + y1) / 2f) / pixelsPerPoint;
-            tokens.add(new OcrToken(text, cx, cy, 0.75));
+            tokens.add(new OcrToken(text, cx, cy, 0.75, (x1 - x0) / pixelsPerPoint, (y1 - y0) / pixelsPerPoint));
         }
         return tokens;
     }
@@ -128,17 +129,28 @@ public final class PpOcr implements AutoCloseable {
         double score = 0;
         int count = 0;
         for (int t = 0; t < steps; t++) {
+            int offset = t * classes;
             int best = 0;
             float bestV = -1e9f;
-            int offset = t * classes;
+            int latin = 0;
+            float latinV = -1e9f;
             for (int c = 0; c < classes; c++) {
                 float v = logits[offset + c];
                 if (v > bestV) {
                     bestV = v;
                     best = c;
                 }
+                if (c == 0 || (c - 1 < keys.size() && LatinScript.allowedKey(keys.get(c - 1)))) {
+                    if (v > latinV) {
+                        latinV = v;
+                        latin = c;
+                    }
+                }
             }
-            if (best != 0 && best != prev && best - 1 < keys.size()) {
+            if (best != 0 && best - 1 < keys.size() && !LatinScript.allowedKey(keys.get(best - 1))) {
+                best = latinV < bestV - 1.5f ? 0 : latin;
+            }
+            if (best != 0 && best != prev && best - 1 < keys.size() && LatinScript.allowedKey(keys.get(best - 1))) {
                 text.append(keys.get(best - 1));
                 score += bestV;
                 count++;
@@ -155,7 +167,7 @@ public final class PpOcr implements AutoCloseable {
         boolean[] seen = new boolean[width * height];
         List<int[]> boxes = new ArrayList<int[]>();
         int[] stack = new int[width * height];
-        for (int i = 0; i < map.length; i += 2) {
+        for (int i = 0; i < map.length; i++) {
             if (seen[i] || map[i] < 0.3f) {
                 continue;
             }
@@ -189,7 +201,7 @@ public final class PpOcr implements AutoCloseable {
             if (count > 12 && sum / count >= 0.5f && maxX - minX > 6 && maxY - minY > 4) {
                 boxes.add(new int[]{minX, minY, maxX + 1, maxY + 1});
             }
-            if (boxes.size() >= 48) {
+            if (boxes.size() >= 80) {
                 break;
             }
         }

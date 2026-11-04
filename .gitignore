@@ -10,6 +10,7 @@ venv/
 examples/*.pdf
 examples/*.png
 examples/*.xlsx
+android-app/app/src/main/assets/matprotokoll_grund.xlsx
 examples/*.json
 .mypy_cache/
 .ruff_cache/

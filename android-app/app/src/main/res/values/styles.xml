@@ -1,12 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar" />
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/page_bg</item>
+        <item name="android:colorBackground">@color/page_bg</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textColorHint">@color/hint</item>
+        <item name="android:editTextColor">@color/text_primary</item>
+        <item name="android:statusBarColor">@color/secondary</item>
+        <item name="android:navigationBarColor">@color/page_bg</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
 
-    <style name="BigButton" parent="@android:style/Widget.DeviceDefault.Button">
+    <style name="PrimaryButton" parent="@android:style/Widget.DeviceDefault.Button">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:minHeight">@dimen/button_height</item>
         <item name="android:textSize">@dimen/body_text</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/primary_button_text</item>
+        <item name="android:background">@drawable/bg_button_primary</item>
+        <item name="android:paddingLeft">16dp</item>
+        <item name="android:paddingRight">16dp</item>
+    </style>
+
+    <style name="SecondaryButton" parent="@android:style/Widget.DeviceDefault.Button">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="android:textSize">@dimen/body_text</item>
+        <item name="android:textColor">@color/secondary_button_text</item>
+        <item name="android:background">@drawable/bg_button_secondary</item>
         <item name="android:paddingLeft">16dp</item>
         <item name="android:paddingRight">16dp</item>
     </style>
