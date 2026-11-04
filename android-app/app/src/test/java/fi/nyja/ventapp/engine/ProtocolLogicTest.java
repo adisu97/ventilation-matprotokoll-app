@@ -15,6 +15,7 @@ import java.util.zip.ZipInputStream;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ProtocolLogicTest {
@@ -33,6 +34,70 @@ public class ProtocolLogicTest {
         assertEquals("supply", supply.kind);
         assertEquals(2, supply.qty);
         assertEquals("160", supply.size);
+    }
+
+    @Test
+    public void fuzzyNameSurvivesOneOcrSubstitution() {
+        Vent misread = LabelParser.parse("DVKH 200 +40", 0, 0, 0.8);
+        assertNotNull(misread);
+        assertEquals("dykh", misread.canonicalName());
+        assertEquals("supply", misread.kind);
+        assertEquals("200", misread.size);
+        Vent shortName = LabelParser.parse("HEK-125 -15", 0, 0, 0.8);
+        assertNotNull(shortName);
+        assertEquals("hfk", shortName.canonicalName());
+        assertEquals("exhaust", shortName.kind);
+    }
+
+    @Test
+    public void rotatedPointMapsBack() {
+        double[] rotated = OcrGeometry.rotateClockwise(10, 4, 30, 20, 90);
+        double[] back = OcrGeometry.unmapClockwise(rotated[0], rotated[1], 30, 20, 90);
+        assertEquals(10, back[0], 0.01);
+        assertEquals(4, back[1], 0.01);
+        double[] turned = OcrGeometry.rotateClockwise(10, 4, 30, 20, 270);
+        double[] home = OcrGeometry.unmapClockwise(turned[0], turned[1], 30, 20, 270);
+        assertEquals(10, home[0], 0.01);
+        assertEquals(4, home[1], 0.01);
+    }
+
+    @Test
+    public void nearbyFragmentsBecomeOneLabel() {
+        OcrToken name = new OcrToken("DYKH", 10, 20, 0.8, 18, 6);
+        OcrToken size = new OcrToken("200", 28, 20, 0.8, 12, 6);
+        java.util.List<OcrToken> merged = TokenCleanup.prepare(java.util.Arrays.asList(size, name));
+        assertEquals(1, merged.size());
+        assertEquals("DYKH 200", merged.get(0).text);
+    }
+
+    @Test
+    public void userAddedNameIsUsedAndOcrIsTolerant() {
+        VentCatalog previous = LabelParser.current();
+        try {
+            assertEquals("Skriv ett namn.", VentCatalog.defaults().rejection("  ", true));
+            assertEquals("Namnet finns redan.", VentCatalog.defaults().rejection("kso", false));
+            VentCatalog custom = VentCatalog.defaults().add(" nova ", true);
+            assertEquals("Namnet finns redan.", custom.rejection("NOVA", true));
+            LabelParser.use(custom);
+            Vent added = LabelParser.parse("N0VA-125 +30", 1, 2, 0.8);
+            assertNotNull(added);
+            assertEquals("nova", added.canonicalName());
+            assertEquals("supply", added.kind);
+            assertEquals("125", added.size);
+            assertEquals(30.0, added.airflow, 0.01);
+
+            LabelParser.use(custom.setEnabled("KSO", false, false));
+            assertNull(LabelParser.parse("KSO-125 -20", 0, 0, 1));
+
+            VentCatalog restored = VentCatalog.fromJson(custom.toJson());
+            LabelParser.use(restored);
+            Vent again = LabelParser.parse("nova-160", 0, 0, 1);
+            assertNotNull(again);
+            assertEquals("nova", again.canonicalName());
+            assertEquals("supply", again.kind);
+        } finally {
+            LabelParser.use(previous);
+        }
     }
 
     @Test

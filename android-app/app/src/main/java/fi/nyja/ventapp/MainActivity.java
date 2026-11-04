@@ -3,6 +3,7 @@ package fi.nyja.ventapp;
 import android.Manifest;
 import android.app.Activity;
 import android.content.ClipData;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -42,6 +43,7 @@ public class MainActivity extends Activity {
     private static final int REQ_CAMERA = 2;
     private static final int REQ_CAMERA_PERMISSION = 3;
     private static final int REQ_WORKBOOK = 4;
+    private static final int REQ_NOTIFICATIONS = 8;
     private static final long PER_FILE_MS = 1000L;
     private static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -100,7 +102,21 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        try {
+            createScreen(savedInstanceState);
+        } catch (Throwable error) {
+            CrashLog.report(this, error);
+            finish();
+        }
+    }
+
+    private void createScreen(Bundle savedInstanceState) {
         setContentView(R.layout.activity_main);
+        SystemBarInsets.apply(this, R.id.screenRoot);
+        TextView versionView = findViewById(R.id.versionLabel);
+        if (versionView != null) {
+            versionView.setText(CrashLog.versionLabel(this));
+        }
         excelName = findViewById(R.id.excelName);
         fileList = findViewById(R.id.fileList);
         emptyList = findViewById(R.id.emptyList);
@@ -113,6 +129,13 @@ public class MainActivity extends Activity {
         startButton = findViewById(R.id.start);
         downloadButton = findViewById(R.id.download);
         appendExisting = findViewById(R.id.appendExisting);
+        if (excelName == null || fileList == null || emptyList == null || percentView == null
+                || progressBar == null || statusView == null || etaView == null || formError == null
+                || workbookMode == null || startButton == null || downloadButton == null
+                || appendExisting == null || findViewById(R.id.pickPdfs) == null
+                || findViewById(R.id.takePhoto) == null) {
+            throw new IllegalStateException("Skärmen saknar en nödvändig vy.");
+        }
 
         findViewById(R.id.pickPdfs).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -124,6 +147,25 @@ public class MainActivity extends Activity {
             @Override
             public void onClick(View v) {
                 takePhoto();
+            }
+        });
+        findViewById(R.id.showOcr).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String text = ExtractionService.state().debug;
+                if (text == null || text.trim().length() == 0) {
+                    Toast.makeText(MainActivity.this, R.string.ocr_empty, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                Intent view = new Intent(MainActivity.this, OcrLogActivity.class);
+                view.putExtra(OcrLogActivity.EXTRA_TEXT, text);
+                startActivity(view);
+            }
+        });
+        findViewById(R.id.ventNames).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, VentNamesActivity.class));
             }
         });
         findViewById(R.id.appendLabel).setOnClickListener(new View.OnClickListener() {
@@ -204,6 +246,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onStart() {
         super.onStart();
+        if (excelName == null) {
+            return;
+        }
         ExtractionService.listen(jobListener);
         applyJob();
     }
@@ -218,6 +263,10 @@ public class MainActivity extends Activity {
     protected void onRestoreInstanceState(Bundle savedInstanceState) {
         ignoreSwitch = true;
         super.onRestoreInstanceState(savedInstanceState);
+        if (appendExisting == null) {
+            ignoreSwitch = false;
+            return;
+        }
         appendExisting.setChecked(existingWorkbookUri != null);
         ignoreSwitch = false;
         showWorkbookMode();
@@ -304,12 +353,19 @@ public class MainActivity extends Activity {
             grantUriPermission(packageName, pendingPhotoUri,
                     Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
         }
-        if (intent.resolveActivity(getPackageManager()) == null) {
+        if (cameras.isEmpty()) {
             clearPendingPhoto(true);
             Toast.makeText(this, R.string.no_camera, Toast.LENGTH_LONG).show();
             return;
         }
-        startActivityForResult(intent, REQ_CAMERA);
+        if (cameras.size() == 1) {
+            intent.setComponent(new ComponentName(
+                    cameras.get(0).activityInfo.packageName,
+                    cameras.get(0).activityInfo.name));
+            startActivityForResult(intent, REQ_CAMERA);
+            return;
+        }
+        startActivityForResult(Intent.createChooser(intent, getString(R.string.take_photo)), REQ_CAMERA);
     }
 
     @Override
@@ -347,6 +403,13 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_NOTIFICATIONS) {
+            if (grantResults.length == 0 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, R.string.notifications_denied, Toast.LENGTH_LONG).show();
+            }
+            beginExtraction();
+            return;
+        }
         if (requestCode != REQ_CAMERA_PERMISSION) {
             return;
         }
@@ -476,6 +539,17 @@ public class MainActivity extends Activity {
         View row = getLayoutInflater().inflate(R.layout.item_drawing, fileList, false);
         TextView name = row.findViewById(R.id.drawingName);
         name.setText(entry.name);
+        row.findViewById(R.id.viewFile).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent preview = new Intent(MainActivity.this, PreviewActivity.class);
+                preview.putExtra(PreviewActivity.EXTRA_URI, entry.uri);
+                preview.putExtra(PreviewActivity.EXTRA_KIND, entry.kind);
+                preview.putExtra(PreviewActivity.EXTRA_PATH, entry.photoPath);
+                preview.putExtra(PreviewActivity.EXTRA_NAME, entry.name);
+                startActivity(preview);
+            }
+        });
         row.findViewById(R.id.remove).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -503,8 +577,13 @@ public class MainActivity extends Activity {
         }
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 8);
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFICATIONS);
+            return;
         }
+        beginExtraction();
+    }
+
+    private void beginExtraction() {
         excelName.setError(null);
         formError.setText("");
         done = false;
@@ -577,13 +656,12 @@ public class MainActivity extends Activity {
         try {
             Uri uri = writeDownload(state.filename, state.xlsx);
             Intent view = new Intent(Intent.ACTION_VIEW);
-            view.setDataAndType(uri, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            view.setDataAndType(uri, XLSX_MIME);
             view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            Intent share = new Intent(Intent.ACTION_SEND);
-            share.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            share.putExtra(Intent.EXTRA_STREAM, uri);
-            share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(view, "Öppna Excel"));
+            view.setClipData(ClipData.newRawUri("excel", uri));
+            Intent chooser = Intent.createChooser(view, "Öppna Excel");
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(chooser);
         } catch (Exception ex) {
             Toast.makeText(this, ex.getMessage() == null ? "Kunde inte spara Excel-filen." : ex.getMessage(), Toast.LENGTH_LONG).show();
         }
@@ -610,9 +688,9 @@ public class MainActivity extends Activity {
             }
             return uri;
         }
-        File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-        if (!dir.exists() && !dir.mkdirs()) {
-            dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (dir == null || (!dir.exists() && !dir.mkdirs())) {
+            throw new IllegalStateException("Kunde inte skapa filen.");
         }
         File file = new File(dir, filename);
         FileOutputStream out = new FileOutputStream(file);
