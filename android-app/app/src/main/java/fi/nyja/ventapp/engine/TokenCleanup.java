@@ -13,7 +13,10 @@ public final class TokenCleanup {
     public static List<OcrToken> prepare(List<OcrToken> tokens) {
         List<OcrToken> unique = new ArrayList<OcrToken>();
         for (OcrToken token : tokens) {
-            String trimmed = token.text.trim();
+            String trimmed = LatinScript.clean(token.text).trim();
+            if (!trimmed.equals(token.text)) {
+                token = new OcrToken(trimmed, token.x, token.y, token.confidence, token.w, token.h);
+            }
             if (trimmed.length() < 2 && !isFragment(trimmed)) {
                 continue;
             }

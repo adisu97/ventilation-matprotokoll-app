@@ -13,6 +13,7 @@ import java.util.List;
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtSession;
+import fi.nyja.ventapp.engine.LatinScript;
 import fi.nyja.ventapp.engine.OcrToken;
 
 /** PP-OCRv4 det + rec. Models are the Apache-2.0 PaddleOCR weights shipped in assets. */
@@ -74,7 +75,7 @@ public final class PpOcr implements AutoCloseable {
             int y0 = clamp((int) (box[1] * backY) - 2, 0, height - 1);
             int x1 = clamp((int) (box[2] * backX) + 2, x0 + 1, width);
             int y1 = clamp((int) (box[3] * backY) + 2, y0 + 1, height);
-            String text = recognize(px, width, x0, y0, x1, y1);
+            String text = LatinScript.clean(recognize(px, width, x0, y0, x1, y1));
             if (text.length() < 2) {
                 continue;
             }
@@ -128,17 +129,28 @@ public final class PpOcr implements AutoCloseable {
         double score = 0;
         int count = 0;
         for (int t = 0; t < steps; t++) {
+            int offset = t * classes;
             int best = 0;
             float bestV = -1e9f;
-            int offset = t * classes;
+            int latin = 0;
+            float latinV = -1e9f;
             for (int c = 0; c < classes; c++) {
                 float v = logits[offset + c];
                 if (v > bestV) {
                     bestV = v;
                     best = c;
                 }
+                if (c == 0 || (c - 1 < keys.size() && LatinScript.allowedKey(keys.get(c - 1)))) {
+                    if (v > latinV) {
+                        latinV = v;
+                        latin = c;
+                    }
+                }
             }
-            if (best != 0 && best != prev && best - 1 < keys.size()) {
+            if (best != 0 && best - 1 < keys.size() && !LatinScript.allowedKey(keys.get(best - 1))) {
+                best = latinV < bestV - 1.5f ? 0 : latin;
+            }
+            if (best != 0 && best != prev && best - 1 < keys.size() && LatinScript.allowedKey(keys.get(best - 1))) {
                 text.append(keys.get(best - 1));
                 score += bestV;
                 count++;

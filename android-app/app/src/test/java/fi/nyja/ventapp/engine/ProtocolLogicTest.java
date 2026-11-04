@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import static org.junit.Assert.fail;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -177,6 +178,86 @@ public class ProtocolLogicTest {
     }
 
     @Test
+    public void sizesAreNotRoomsAndAirflowKeepsItsUnit() {
+        assertNull(ProtocolBuilder.roomNumber("Ø125"));
+        List<Room> sized = ProtocolBuilder.roomsFromTokens(Arrays.asList(
+                new OcrToken("125", 40, 40, 0.9),
+                new OcrToken("KSO-125", 48, 40, 0.9)));
+        assertEquals(0, sized.size());
+        Vent diameter = LabelParser.parse("KSO-Ø125 -20", 0, 0, 1);
+        assertNotNull(diameter);
+        assertEquals("125", diameter.size);
+        assertEquals(20.0, diameter.airflow, 0.01);
+        Vent rect = LabelParser.parse("KSO 200x100", 0, 0, 1);
+        assertNotNull(rect);
+        assertEquals("200x100", rect.size);
+        Vent comma = LabelParser.parse("KTS-100 +20,5", 0, 0, 1);
+        assertNotNull(comma);
+        assertEquals(20.5, comma.airflow, 0.01);
+        Vent cubic = LabelParser.parse("KTS-160 +72 m3/h", 0, 0, 1);
+        assertNotNull(cubic);
+        assertEquals(20.0, cubic.airflow, 0.05);
+        assertEquals("Kök", LatinScript.correctRoomName("Kok"));
+        assertEquals("Förråd", LatinScript.correctRoomName("Forrad"));
+        assertEquals("AULA", LatinScript.correctRoomName("AULA"));
+        assertEquals("", LatinScript.clean("房间"));
+        assertFalse(LatinScript.hasCjk(LatinScript.clean("E125房间")));
+        assertFalse(LatinScript.allowedKey("疗"));
+        assertTrue(LatinScript.allowedKey("ä"));
+    }
+
+    @Test
+    public void sampleFixturePrecisionAndAFarVentIsUnsure() throws Exception {
+        File pdf = new File("../../tests/fixtures/mini_ritning.pdf");
+        if (!pdf.isFile()) {
+            pdf = new File("../tests/fixtures/mini_ritning.pdf");
+        }
+        PdfTextLayer.Result text = PdfTextLayer.read(java.nio.file.Files.readAllBytes(pdf.toPath()));
+        assertNull(text.error);
+        List<OcrToken> prepared = TokenCleanup.prepare(text.tokens);
+        List<Room> rooms = ProtocolBuilder.roomsFromTokens(prepared);
+        List<Vent> vents = ProtocolBuilder.ventsFromTokens(prepared);
+        int roomHits = 0;
+        for (Room room : rooms) {
+            if ("E125".equals(room.number) || "E102".equals(room.number)) {
+                roomHits++;
+            } else {
+                fail("unexpected room " + room.number + " " + room.name);
+            }
+        }
+        assertEquals(2, roomHits);
+        assertEquals(1.0, roomHits / (double) rooms.size(), 0.001);
+        int kso = 0;
+        int kts = 0;
+        int eagle = 0;
+        for (Vent vent : vents) {
+            if ("kso".equals(vent.canonicalName())) {
+                kso++;
+                assertEquals("125", vent.size);
+                assertEquals(20.0, vent.airflow, 0.01);
+            } else if ("kts".equals(vent.canonicalName())) {
+                kts++;
+                assertEquals("100", vent.size);
+                assertEquals(20.0, vent.airflow, 0.01);
+            } else if ("eagle".equals(vent.canonicalName())) {
+                eagle++;
+                assertEquals(2, vent.qty);
+                assertEquals(90.0, vent.airflow, 0.01);
+            } else {
+                fail("unexpected vent " + vent.canonicalName());
+            }
+        }
+        assertEquals(2, kso);
+        assertEquals(1, kts);
+        assertEquals(1, eagle);
+        List<ProtocolRow> far = ProtocolBuilder.pair(
+                Collections.singletonList(new Room("E125", "WC", 0, 0, 0.95)),
+                Collections.singletonList(new Vent("kso", "exhaust", "125", 20.0, 1, 300, 0, "KSO", 0.9)));
+        assertTrue(far.get(0).unsure);
+        assertTrue(far.get(0).unsureReason.contains("långt"));
+    }
+
+    @Test
     public void parsesExhaustAndSupplyLabels() {
         Vent exhaust = LabelParser.parse("KSO-125 -20", 10, 20, 0.9);
         assertNotNull(exhaust);
@@ -321,6 +402,26 @@ public class ProtocolLogicTest {
         assertTrue(plan.contains("<v>35</v>"));
         assertTrue(plan.contains("<v>20</v>"));
         assertTrue(plan.contains("<v>0</v>"));
+        String styles = zipText(xlsx, "xl/styles.xml");
+        String yellow = fillOf(styles, styleOf(plan, "C1"));
+        String red = fillOf(styles, styleOf(plan, "I1"));
+        assertEquals("FFFFFFCC", yellow);
+        assertEquals("FFFFD9D9", red);
+        int totalRow = Integer.parseInt(plan.replaceAll("(?s).*r=\"A(\\d+)\"[^>]*>.*?Kokonais.*", "$1"));
+        for (int row = 2; row <= totalRow; row++) {
+            for (char col = 'C'; col <= 'H'; col++) {
+                String ref = col + Integer.toString(row);
+                assertTrue(plan.contains("r=\"" + ref + "\""));
+                assertEquals(ref, yellow, fillOf(styles, styleOf(plan, ref)));
+            }
+            for (char col = 'I'; col <= 'N'; col++) {
+                String ref = col + Integer.toString(row);
+                assertTrue(plan.contains("r=\"" + ref + "\""));
+                assertEquals(ref, red, fillOf(styles, styleOf(plan, ref)));
+            }
+        }
+        assertFalse(plan.contains("r=\"A3\""));
+        assertFalse(plan.contains("r=\"B3\""));
         String workbookXml = zipText(xlsx, "xl/workbook.xml");
         assertTrue(workbookXml.contains("fullCalcOnLoad=\"1\""));
         String cover = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Yhteensä Totalt");
@@ -329,6 +430,48 @@ public class ProtocolLogicTest {
         assertFalse(cover.contains("<v/>"));
         String unsureSheet = zipEntryContaining(xlsx, "xl/worksheets/sheet", "storlek saknas");
         assertTrue(unsureSheet.contains("E102 AULA"));
+    }
+
+    private static String styleOf(String sheet, String ref) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "r=\"" + ref + "\"[^>]*s=\"(\\d+)\"").matcher(sheet);
+        assertTrue(ref, matcher.find());
+        return matcher.group(1);
+    }
+
+    private static String fillOf(String styles, String styleIndex) {
+        java.util.regex.Matcher xfs = java.util.regex.Pattern.compile("(?s)<cellXfs[^>]*>(.*)</cellXfs>").matcher(styles);
+        assertTrue(xfs.find());
+        java.util.regex.Matcher xf = java.util.regex.Pattern.compile("<xf\\b([^>]*)/?>").matcher(xfs.group(1));
+        int index = Integer.parseInt(styleIndex);
+        int at = 0;
+        String attrs = null;
+        while (xf.find()) {
+            if (at == index) {
+                attrs = xf.group(1);
+                break;
+            }
+            at++;
+        }
+        assertNotNull(styleIndex);
+        java.util.regex.Matcher fillId = java.util.regex.Pattern.compile("fillId=\"(\\d+)\"").matcher(attrs);
+        assertTrue(fillId.find());
+        java.util.regex.Matcher fills = java.util.regex.Pattern.compile("(?s)<fills[^>]*>(.*)</fills>").matcher(styles);
+        assertTrue(fills.find());
+        java.util.regex.Matcher fill = java.util.regex.Pattern.compile("(?s)<fill\\b.*?</fill>").matcher(fills.group(1));
+        at = 0;
+        String body = null;
+        while (fill.find()) {
+            if (at == Integer.parseInt(fillId.group(1))) {
+                body = fill.group(0);
+                break;
+            }
+            at++;
+        }
+        assertNotNull(body);
+        java.util.regex.Matcher rgb = java.util.regex.Pattern.compile("rgb=\"([0-9A-Fa-f]+)\"").matcher(body);
+        assertTrue(body, rgb.find());
+        return rgb.group(1).toUpperCase();
     }
 
     private static Room roomNamed(List<Room> rooms, String number) {

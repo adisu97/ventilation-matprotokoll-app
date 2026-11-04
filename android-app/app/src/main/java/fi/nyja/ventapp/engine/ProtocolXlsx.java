@@ -132,9 +132,10 @@ public final class ProtocolXlsx {
             data.append(dataRow(r, row, styles));
             r++;
         }
+        int dataLast = rows.isEmpty() ? 2 : rows.size() + 1;
         int total = rows.isEmpty() ? 3 : rows.size() + 3;
-        data.append(totalRow(total, rows.isEmpty() ? 2 : 2, rows.isEmpty() ? 2 : rows.size() + 1, styles,
-                sumBehov(rows, true), sumBehov(rows, false)));
+        data.append(bandRow(total - 1, styles));
+        data.append(totalRow(total, 2, dataLast, styles, sumBehov(rows, true), sumBehov(rows, false)));
         String sheetData = "<sheetData>" + header + data + "</sheetData>";
         if (prepared != null && prepared.contains("<sheetData>") && prepared.contains("</sheetData>")) {
             int start = prepared.indexOf("<sheetData>");
@@ -256,14 +257,30 @@ public final class ProtocolXlsx {
         }
         if (!data.exhaustName.isEmpty()) {
             cell(xml, 3, row, data.exhaustName, style);
-            cell(xml, 4, row, data.exhaustSize, style);
-            numberCell(xml, 5, row, num(data.exhaustBehov), style);
+            valueOrBand(xml, 4, row, data.exhaustSize, style);
+            valueOrBand(xml, 5, row, num(data.exhaustBehov), style, true);
+        } else {
+            band(xml, row, style, 3, 5);
         }
+        band(xml, row, style, 6, 8);
         if (!data.supplyName.isEmpty()) {
             cell(xml, 9, row, data.supplyName, style);
-            cell(xml, 10, row, data.supplySize, style);
-            numberCell(xml, 11, row, num(data.supplyBehov), style);
+            valueOrBand(xml, 10, row, data.supplySize, style);
+            valueOrBand(xml, 11, row, num(data.supplyBehov), style, true);
+        } else {
+            band(xml, row, style, 9, 11);
         }
+        band(xml, row, style, 12, 14);
+        xml.append("</row>");
+        return xml.toString();
+    }
+
+    /** Empty frånluft C–H and tilluft I–N cells, using the template data style so the fill stays. */
+    private static String bandRow(int row, String styles) {
+        String[] style = styles.split(",");
+        StringBuilder xml = new StringBuilder();
+        xml.append("<row r=\"").append(row).append("\">");
+        band(xml, row, style, 3, 14);
         xml.append("</row>");
         return xml.toString();
     }
@@ -273,10 +290,13 @@ public final class ProtocolXlsx {
         StringBuilder xml = new StringBuilder();
         xml.append("<row r=\"").append(row).append("\">");
         cell(xml, 1, row, "Kokonaisilmamäärät/Totalt", style);
+        band(xml, row, style, 3, 4);
         formula(xml, 5, row, "SUM(E" + from + ":E" + to + ")", style, exhaustBehov);
         formula(xml, 6, row, "SUM(F" + from + ":F" + to + ")", style, 0);
+        band(xml, row, style, 7, 10);
         formula(xml, 11, row, "SUM(K" + from + ":K" + to + ")", style, supplyBehov);
         formula(xml, 12, row, "SUM(L" + from + ":L" + to + ")", style, 0);
+        band(xml, row, style, 13, 14);
         xml.append("</row>");
         return xml.toString();
     }
@@ -290,6 +310,31 @@ public final class ProtocolXlsx {
             }
         }
         return sum;
+    }
+
+    private static void band(StringBuilder xml, int row, String[] style, int from, int to) {
+        for (int col = from; col <= to; col++) {
+            emptyStyled(xml, col, row, style);
+        }
+    }
+
+    private static void valueOrBand(StringBuilder xml, int col, int row, String value, String[] style) {
+        valueOrBand(xml, col, row, value, style, false);
+    }
+
+    private static void valueOrBand(StringBuilder xml, int col, int row, String value, String[] style, boolean number) {
+        if (value == null || value.isEmpty()) {
+            emptyStyled(xml, col, row, style);
+        } else if (number) {
+            numberCell(xml, col, row, value, style);
+        } else {
+            cell(xml, col, row, value, style);
+        }
+    }
+
+    private static void emptyStyled(StringBuilder xml, int col, int row, String[] style) {
+        String s = style.length >= col ? style[col - 1] : "0";
+        xml.append("<c r=\"").append(cellRef(col, row)).append("\" s=\"").append(s).append("\"/>");
     }
 
     private static void cell(StringBuilder xml, int col, int row, String value, String[] style) {

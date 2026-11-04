@@ -16,7 +16,7 @@ public final class ProtocolBuilder {
     private static final Pattern SPLIT_DIGIT_SPACE = Pattern.compile("^(\\d{2,4})\\s+([A-ZÅÄÖa-zåäö]{2,24})$");
     private static final Pattern SPLIT_LETTER_GLUE = Pattern.compile("^([A-ZÅÄÖa-zåäö]\\d{2,4})([A-ZÅÄÖa-zåäö]{2,16})$");
     private static final Pattern SPLIT_DIGIT_GLUE = Pattern.compile("^(\\d{3})([A-ZÅÄÖa-zåäö]{2,16})$");
-    private static final double AIR_DIST = 18.0;
+    private static final double AIR_DIST = 36.0;
     private static final double VENT_DEDUPE = 22.0;
     private static final double ROOM_DIST = 420.0;
     private static final double ROOM_SURE = 220.0;
@@ -29,7 +29,7 @@ public final class ProtocolBuilder {
         List<Room> rooms = new ArrayList<Room>();
         for (int i = 0; i < tokens.size(); i++) {
             OcrToken token = tokens.get(i);
-            String text = token.text.trim();
+            String text = LatinScript.clean(token.text.trim());
             RoomText parts = splitRoom(text);
             if (parts == null) {
                 continue;
@@ -38,46 +38,53 @@ public final class ProtocolBuilder {
                     && LabelParser.parse(text, token.x, token.y, token.confidence) != null) {
                 continue;
             }
+            if (LabelParser.looksLikeDuctSize(parts.number) && !LatinScript.isKnownRoomName(parts.name)
+                    && !hasRoomNameNearby(tokens, token)) {
+                continue;
+            }
             String name = parts.name.isEmpty() ? nearbyName(tokens, token) : parts.name;
+            name = LatinScript.correctRoomName(name);
             rooms.add(new Room(parts.number, name, token.x, token.y, token.confidence));
         }
         return mergeCloseRooms(rooms);
     }
 
     public static List<Vent> ventsFromTokens(List<OcrToken> tokens) {
-        List<Vent> vents = new ArrayList<Vent>();
+        List<OcrToken> labels = new ArrayList<OcrToken>();
+        List<List<Vent>> parsed = new ArrayList<List<Vent>>();
         List<OcrToken> leftover = new ArrayList<OcrToken>();
         for (OcrToken token : tokens) {
-            List<Vent> parsed = LabelParser.parseAll(token.text, token.x, token.y, token.confidence);
-            if (!parsed.isEmpty()) {
-                vents.addAll(parsed);
-            } else {
+            List<Vent> found = LabelParser.parseAll(token.text, token.x, token.y, token.confidence);
+            if (found.isEmpty()) {
                 leftover.add(token);
+            } else {
+                labels.add(token);
+                parsed.add(found);
             }
         }
-        List<Vent> withAir = new ArrayList<Vent>();
         boolean[] used = new boolean[leftover.size()];
-        for (Vent vent : vents) {
-            if (vent.airflow != null) {
-                withAir.add(vent);
-                continue;
-            }
+        List<Vent> vents = new ArrayList<Vent>();
+        for (int n = 0; n < labels.size(); n++) {
+            OcrToken token = labels.get(n);
             int best = -1;
             double bestD = AIR_DIST;
             for (int i = 0; i < leftover.size(); i++) {
                 if (used[i] || !LabelParser.isAirflowToken(leftover.get(i).text)) {
                     continue;
                 }
-                double d = dist(vent.x, vent.y, leftover.get(i).x, leftover.get(i).y);
+                double d = distToLabel(token, leftover.get(i));
                 if (d < bestD) {
                     bestD = d;
                     best = i;
                 }
             }
+            LabelParser.Airflow air = null;
             if (best >= 0) {
                 used[best] = true;
-                LabelParser.Airflow air = LabelParser.parseAirflowToken(leftover.get(best).text);
-                if (air != null) {
+                air = LabelParser.parseAirflowToken(leftover.get(best).text);
+            }
+            for (Vent vent : parsed.get(n)) {
+                if (vent.airflow == null && air != null) {
                     String kind = LabelParser.classify(vent.name, air.value, air.signed);
                     if (kind == null) {
                         kind = vent.kind;
@@ -85,15 +92,29 @@ public final class ProtocolBuilder {
                     vent = new Vent(vent.name, kind, vent.size, Math.abs(air.value), vent.qty,
                             vent.x, vent.y, vent.raw, vent.confidence);
                 }
+                vents.add(vent);
             }
-            withAir.add(vent);
         }
-        return dedupe(withAir);
+        return dedupe(vents);
+    }
+
+    private static double distToLabel(OcrToken label, OcrToken other) {
+        double left = label.w > 0 ? label.x - label.w / 2.0 : label.x;
+        double right = label.w > 0 ? label.x + label.w / 2.0 : label.x;
+        double dx = 0;
+        if (other.x < left) {
+            dx = left - other.x;
+        } else if (other.x > right) {
+            dx = other.x - right;
+        }
+        double dy = Math.abs(label.y - other.y);
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
     public static List<ProtocolRow> pair(List<Room> rooms, List<Vent> vents) {
         Map<String, List<Vent>> grouped = new LinkedHashMap<String, List<Vent>>();
         Map<String, Double> confidence = new LinkedHashMap<String, Double>();
+        Map<String, String> distanceNote = new LinkedHashMap<String, String>();
         if (rooms == null || rooms.isEmpty()) {
             if (!vents.isEmpty()) {
                 grouped.put("", new ArrayList<Vent>(vents));
@@ -119,6 +140,9 @@ public final class ProtocolBuilder {
                     double conf = bestD > ROOM_SURE ? Math.min(best.confidence, 0.5) : best.confidence;
                     Double previous = confidence.get(key);
                     confidence.put(key, previous == null ? conf : Math.min(previous, conf));
+                    if (bestD > ROOM_SURE) {
+                        distanceNote.put(key, "don långt från rumsnumret");
+                    }
                 }
             }
             for (Room room : rooms) {
@@ -147,12 +171,13 @@ public final class ProtocolBuilder {
         for (String key : order) {
             String label = key.isEmpty() ? "okänt utrymme" : key;
             double roomConf = confidence.containsKey(key) ? confidence.get(key) : 0.4;
-            rows.addAll(rowsForRoom(label, grouped.get(key), roomConf, key.isEmpty()));
+            rows.addAll(rowsForRoom(label, grouped.get(key), roomConf, key.isEmpty(), distanceNote.get(key)));
         }
         return rows;
     }
 
-    private static List<ProtocolRow> rowsForRoom(String label, List<Vent> vents, double roomConf, boolean unknown) {
+    private static List<ProtocolRow> rowsForRoom(String label, List<Vent> vents, double roomConf, boolean unknown,
+            String distanceNote) {
         List<Vent> expanded = new ArrayList<Vent>();
         for (Vent vent : vents) {
             expanded.addAll(expand(vent));
@@ -175,7 +200,7 @@ public final class ProtocolBuilder {
         for (int i = 0; i < n; i++) {
             Vent ex = i < exhaust.size() ? exhaust.get(i) : null;
             Vent su = i < supply.size() ? supply.get(i) : null;
-            String reason = unsureReason(ex, su, unknown, roomConf);
+            String reason = unsureReason(ex, su, unknown, roomConf, distanceNote);
             double conf = Math.min(roomConf, Math.min(conf(ex), conf(su)));
             rows.add(new ProtocolRow(
                     i == 0 ? label : "",
@@ -192,10 +217,12 @@ public final class ProtocolBuilder {
         return rows;
     }
 
-    private static String unsureReason(Vent ex, Vent su, boolean unknown, double roomConf) {
+    private static String unsureReason(Vent ex, Vent su, boolean unknown, double roomConf, String distanceNote) {
         StringBuilder reason = new StringBuilder();
         if (unknown) {
             reason.append("inget rum ");
+        } else if (distanceNote != null && !distanceNote.isEmpty()) {
+            reason.append(distanceNote).append(' ');
         } else if (roomConf < UNSURE_CONFIDENCE) {
             reason.append("osäkert rum ");
         }
@@ -393,7 +420,7 @@ public final class ProtocolBuilder {
                 continue;
             }
             String text = token.text.trim();
-            String name = roomName(text);
+            String name = roomName(LatinScript.correctRoomName(text));
             if (name == null) {
                 continue;
             }
@@ -404,6 +431,21 @@ public final class ProtocolBuilder {
             }
         }
         return best;
+    }
+
+    private static boolean hasRoomNameNearby(List<OcrToken> tokens, OcrToken room) {
+        for (OcrToken token : tokens) {
+            if (token == room) {
+                continue;
+            }
+            if (!LatinScript.isKnownRoomName(token.text)) {
+                continue;
+            }
+            if (dist(room.x, room.y, token.x, token.y) < 42) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static double dist(double x1, double y1, double x2, double y2) {
