@@ -22,12 +22,43 @@ public class ProtocolLogicTest {
     @Test
     public void roomNumberCanSitInsideALongerLine() {
         assertEquals("E125", ProtocolBuilder.roomNumber("E125 WC"));
-        assertEquals("E125WC", ProtocolBuilder.roomNumber("e125wc"));
+        assertEquals("E125", ProtocolBuilder.roomNumber("e125wc"));
+        assertEquals("WC", ProtocolBuilder.splitRoom("E125 WC").name);
+        assertEquals("wc", ProtocolBuilder.splitRoom("e125wc").name);
+        assertEquals("125", ProtocolBuilder.splitRoom("125WC").number);
+        assertEquals("WC", ProtocolBuilder.splitRoom("125WC").name);
+        assertEquals("102", ProtocolBuilder.splitRoom("102AULA").number);
+        assertEquals("AULA", ProtocolBuilder.splitRoom("102AULA").name);
+        assertEquals("111A", ProtocolBuilder.splitRoom("111a").number);
+        assertEquals("", ProtocolBuilder.splitRoom("111a").name);
         assertNull(ProtocolBuilder.roomNumber("KSO-125"));
         java.util.List<Room> rooms = ProtocolBuilder.roomsFromTokens(
                 java.util.Collections.singletonList(new OcrToken("E125 WC", 10, 20, 1)));
         assertEquals(1, rooms.size());
         assertEquals("E125", rooms.get(0).number);
+        assertEquals("WC", rooms.get(0).name);
+    }
+
+    @Test
+    public void nearbyRoomNameComesFromTheTextAboveTheNumber() {
+        List<OcrToken> tokens = Arrays.asList(
+                new OcrToken("WC", 49.2, 35.7, 1),
+                new OcrToken("E125", 52.8, 50.7, 1),
+                new OcrToken("KSO-125-C", 60, 55, 1),
+                new OcrToken("AULA", 54.4, 175.7, 1),
+                new OcrToken("E102", 52.8, 190.7, 1),
+                new OcrToken("Ky", 10, 10, 1),
+                new OcrToken("E201", 12, 24, 1),
+                new OcrToken("TS", 80, 10, 1),
+                new OcrToken("130", 82, 22, 1),
+                new OcrToken("Terrass", 200, 8, 1),
+                new OcrToken("E140", 202, 28, 1));
+        List<Room> rooms = ProtocolBuilder.roomsFromTokens(tokens);
+        assertEquals("WC", roomNamed(rooms, "E125").name);
+        assertEquals("AULA", roomNamed(rooms, "E102").name);
+        assertEquals("Ky", roomNamed(rooms, "E201").name);
+        assertEquals("TS", roomNamed(rooms, "130").name);
+        assertEquals("Terrass", roomNamed(rooms, "E140").name);
     }
 
     @Test
@@ -119,7 +150,10 @@ public class ProtocolLogicTest {
         List<ProtocolRow> rows = ProtocolBuilder.pair(Collections.singletonList(room), Arrays.asList(first, second));
         assertEquals(2, rows.size());
         assertEquals("E125 wc", rows.get(0).room);
+        assertEquals("E125", ProtocolBuilder.splitRoom(rows.get(0).room).number);
+        assertEquals("wc", ProtocolBuilder.splitRoom(rows.get(0).room).name);
         assertEquals("", rows.get(1).room);
+        assertNull(ProtocolBuilder.splitRoom(rows.get(1).room));
         assertEquals("kso", rows.get(1).exhaustName);
     }
 
@@ -140,21 +174,46 @@ public class ProtocolLogicTest {
             template = new File("../templates/matprotokoll_grund.xlsx");
         }
         assertTrue(template.isFile());
-        ProtocolRow sure = new ProtocolRow("E125 wc", "kso", "125", 20.0, "kts", "125", 20.0, false, "", 0.95);
-        ProtocolRow unsure = new ProtocolRow("E102", "dykh", null, null, "", null, null, true, "storlek saknas frånluft", 0.4);
+        ProtocolRow sure = new ProtocolRow("E125 WC", "kso", "125", 20.0, "kts", "125", 20.0, false, "", 0.95);
+        ProtocolRow second = new ProtocolRow("", "kso", "100", 15.0, "", null, null, false, "", 0.9);
+        ProtocolRow unsure = new ProtocolRow("E102 AULA", "dykh", null, null, "", null, null, true, "storlek saknas frånluft", 0.4);
         byte[] xlsx = ProtocolXlsx.build(
                 Files.readAllBytes(template.toPath()),
-                Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", Arrays.asList(sure, unsure))),
+                Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", Arrays.asList(sure, second, unsure))),
                 true);
         String workbook = zipText(xlsx, "xl/workbook.xml");
         assertTrue(workbook.contains("Koneet Maskiner"));
         assertTrue(workbook.contains("plan-a"));
         assertTrue(workbook.contains("Osäkra"));
         assertFalse(workbook.contains("name=\"Sheet1\""));
-        String allSheets = zipTextMatching(xlsx, "xl/worksheets/sheet");
-        assertTrue(allSheets.contains("E125 wc"));
-        assertTrue(allSheets.contains("storlek saknas"));
-        assertTrue(allSheets.contains("Kokonaisilmamäärät/Totalt"));
+        String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
+        assertTrue(plan.contains("Rumsnamn"));
+        assertTrue(plan.contains("Frånluftsdon"));
+        assertTrue(plan.contains("<c r=\"A2\""));
+        assertTrue(plan.contains(">E125</t>"));
+        assertTrue(plan.contains("<c r=\"B2\""));
+        assertTrue(plan.contains(">WC</t>"));
+        assertTrue(plan.contains("<c r=\"C2\""));
+        assertTrue(plan.contains(">kso</t>"));
+        assertTrue(plan.contains("<c r=\"I2\""));
+        assertTrue(plan.contains(">kts</t>"));
+        assertFalse(plan.contains("r=\"A3\""));
+        assertFalse(plan.contains("r=\"B3\""));
+        assertTrue(plan.contains("<c r=\"C3\""));
+        assertTrue(plan.contains(">AULA</t>"));
+        assertTrue(plan.contains("Kokonaisilmamäärät/Totalt"));
+        assertTrue(plan.contains("SUM(E2:E4)"));
+        String unsureSheet = zipEntryContaining(xlsx, "xl/worksheets/sheet", "storlek saknas");
+        assertTrue(unsureSheet.contains("E102 AULA"));
+    }
+
+    private static Room roomNamed(List<Room> rooms, String number) {
+        for (Room room : rooms) {
+            if (number.equals(room.number)) {
+                return room;
+            }
+        }
+        throw new AssertionError(number);
     }
 
     private static String zipText(byte[] zip, String name) throws Exception {
@@ -166,6 +225,20 @@ public class ProtocolLogicTest {
             }
         }
         throw new IllegalStateException(name);
+    }
+
+    private static String zipEntryContaining(byte[] zip, String prefix, String marker) throws Exception {
+        ZipInputStream in = new ZipInputStream(new java.io.ByteArrayInputStream(zip));
+        ZipEntry entry;
+        while ((entry = in.getNextEntry()) != null) {
+            if (entry.getName().startsWith(prefix)) {
+                String text = new String(read(in), StandardCharsets.UTF_8);
+                if (text.contains(marker)) {
+                    return text;
+                }
+            }
+        }
+        throw new IllegalStateException(marker);
     }
 
     private static String zipTextMatching(byte[] zip, String prefix) throws Exception {

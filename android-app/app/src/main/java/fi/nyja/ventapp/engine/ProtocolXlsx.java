@@ -122,8 +122,9 @@ public final class ProtocolXlsx {
     }
 
     private static String sheetXml(String prototype, String name, List<ProtocolRow> rows) {
-        String header = headerRow(prototype);
-        String styles = dataStyles(prototype);
+        String prepared = prototype == null ? null : addNameColumn(prototype);
+        String header = headerRow(prepared);
+        String styles = withNameStyle(dataStyles(prototype));
         StringBuilder data = new StringBuilder();
         int r = 2;
         for (ProtocolRow row : rows) {
@@ -133,15 +134,63 @@ public final class ProtocolXlsx {
         int total = rows.isEmpty() ? 3 : rows.size() + 3;
         data.append(totalRow(total, rows.isEmpty() ? 2 : 2, rows.isEmpty() ? 2 : rows.size() + 1, styles));
         String sheetData = "<sheetData>" + header + data + "</sheetData>";
-        if (prototype != null && prototype.contains("<sheetData>") && prototype.contains("</sheetData>")) {
-            int start = prototype.indexOf("<sheetData>");
-            int end = prototype.indexOf("</sheetData>") + "</sheetData>".length();
-            String prefix = prototype.substring(0, start);
-            String suffix = prototype.substring(end);
-            prefix = prefix.replaceFirst("dimension ref=\"[^\"]*\"", "dimension ref=\"A1:M" + total + "\"");
+        if (prepared != null && prepared.contains("<sheetData>") && prepared.contains("</sheetData>")) {
+            int start = prepared.indexOf("<sheetData>");
+            int end = prepared.indexOf("</sheetData>") + "</sheetData>".length();
+            String prefix = prepared.substring(0, start);
+            String suffix = prepared.substring(end);
+            prefix = prefix.replaceFirst("dimension ref=\"[^\"]*\"", "dimension ref=\"A1:N" + total + "\"");
             return prefix + sheetData + suffix;
         }
         return fallbackSheet(sheetData, total);
+    }
+
+    /** Grund has one Utrymme column. The written sheet adds Rumsnamn and shifts the don columns. */
+    private static String addNameColumn(String xml) {
+        if (xml.contains("Rumsnamn")) {
+            return xml;
+        }
+        String shifted = xml;
+        for (int n = 40; n >= 2; n--) {
+            shifted = shifted.replace("min=\"" + n + "\"", "min=\"#" + (n + 1) + "\"");
+            shifted = shifted.replace("max=\"" + n + "\"", "max=\"#" + (n + 1) + "\"");
+        }
+        shifted = shifted.replace("#", "");
+        int colEnd = shifted.indexOf("min=\"1\" max=\"1\" />");
+        if (colEnd >= 0) {
+            colEnd += "min=\"1\" max=\"1\" />".length();
+            String nameWidth = "<col width=\"18\" bestFit=\"1\" customWidth=\"1\" style=\"75\" min=\"2\" max=\"2\" />";
+            shifted = shifted.substring(0, colEnd) + nameWidth + shifted.substring(colEnd);
+        }
+        int start = shifted.indexOf("<row r=\"1\"");
+        int end = start < 0 ? -1 : shifted.indexOf("</row>", start);
+        if (start < 0 || end < 0) {
+            return shifted;
+        }
+        String row = shifted.substring(start, end);
+        for (int col = 20; col >= 2; col--) {
+            row = row.replace("r=\"" + cellRef(col, 1) + "\"", "r=\"" + cellRef(col + 1, 1) + "\"");
+        }
+        row = row.replaceFirst("(?s)<t[^>]*>.*?</t>", "<t>Rumsnummer\nHuonenro</t>");
+        int close = row.indexOf("</c>");
+        if (close >= 0) {
+            String nameCell = "<c r=\"B1\" s=\"18\" t=\"inlineStr\"><is><t>Rumsnamn\nUtrymme</t></is></c>";
+            row = row.substring(0, close + 4) + nameCell + row.substring(close + 4);
+        }
+        return shifted.substring(0, start) + row + shifted.substring(end);
+    }
+
+    private static String withNameStyle(String styles) {
+        String[] parts = styles.split(",");
+        if (parts.length == 0) {
+            return styles;
+        }
+        StringBuilder out = new StringBuilder();
+        out.append(parts[0]).append(',').append(parts[0]);
+        for (int i = 1; i < parts.length; i++) {
+            out.append(',').append(parts[i]);
+        }
+        return out.toString();
     }
 
     private static String headerRow(String prototype) {
@@ -196,16 +245,22 @@ public final class ProtocolXlsx {
         String[] style = styles.split(",");
         StringBuilder xml = new StringBuilder();
         xml.append("<row r=\"").append(row).append("\">");
-        cell(xml, 1, row, data.room, style);
+        ProtocolBuilder.RoomText room = ProtocolBuilder.splitRoom(data.room);
+        if (room == null) {
+            cell(xml, 1, row, data.room, style);
+        } else {
+            cell(xml, 1, row, room.number, style);
+            cell(xml, 2, row, room.name, style);
+        }
         if (!data.exhaustName.isEmpty()) {
-            cell(xml, 2, row, data.exhaustName, style);
-            cell(xml, 3, row, data.exhaustSize, style);
-            cell(xml, 4, row, num(data.exhaustBehov), style);
+            cell(xml, 3, row, data.exhaustName, style);
+            cell(xml, 4, row, data.exhaustSize, style);
+            cell(xml, 5, row, num(data.exhaustBehov), style);
         }
         if (!data.supplyName.isEmpty()) {
-            cell(xml, 8, row, data.supplyName, style);
-            cell(xml, 9, row, data.supplySize, style);
-            cell(xml, 10, row, num(data.supplyBehov), style);
+            cell(xml, 9, row, data.supplyName, style);
+            cell(xml, 10, row, data.supplySize, style);
+            cell(xml, 11, row, num(data.supplyBehov), style);
         }
         xml.append("</row>");
         return xml.toString();
@@ -216,10 +271,10 @@ public final class ProtocolXlsx {
         StringBuilder xml = new StringBuilder();
         xml.append("<row r=\"").append(row).append("\">");
         cell(xml, 1, row, "Kokonaisilmamäärät/Totalt", style);
-        formula(xml, 4, row, "SUM(D" + from + ":D" + to + ")", style);
         formula(xml, 5, row, "SUM(E" + from + ":E" + to + ")", style);
-        formula(xml, 10, row, "SUM(J" + from + ":J" + to + ")", style);
+        formula(xml, 6, row, "SUM(F" + from + ":F" + to + ")", style);
         formula(xml, 11, row, "SUM(K" + from + ":K" + to + ")", style);
+        formula(xml, 12, row, "SUM(L" + from + ":L" + to + ")", style);
         xml.append("</row>");
         return xml.toString();
     }
@@ -273,8 +328,8 @@ public final class ProtocolXlsx {
 
     private static String fallbackHeader() {
         String[] headers = {
-                "Huonetila\nUtrymme", "Poistoilmaelin Frånluftsdon", "Koko Storlek", "Tarve Behov (l/s)",
-                "Mitattu Uppmätt (l/s)", "Paine Tryck (Pa)", "Asento Justering",
+                "Rumsnummer\nHuonenro", "Rumsnamn\nUtrymme", "Poistoilmaelin Frånluftsdon", "Koko Storlek",
+                "Tarve Behov (l/s)", "Mitattu Uppmätt (l/s)", "Paine Tryck (Pa)", "Asento Justering",
                 "Tuloilmaelin Tilluftsdon", "Koko Storlek", "Tarve Behov (l/s)",
                 "Mitattu Uppmätt (l/s)", "Paine Tryck (Pa)", "Asento Justering"
         };
@@ -289,7 +344,7 @@ public final class ProtocolXlsx {
     private static String fallbackSheet(String sheetData, int lastRow) {
         return "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
                 + "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
-                + "<dimension ref=\"A1:M" + lastRow + "\"/>"
+                + "<dimension ref=\"A1:N" + lastRow + "\"/>"
                 + sheetData
                 + "<pageSetup orientation=\"landscape\" fitToWidth=\"1\" fitToHeight=\"0\"/>"
                 + "</worksheet>";
