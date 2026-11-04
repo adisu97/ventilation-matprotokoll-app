@@ -17,8 +17,9 @@ public final class ProtocolBuilder {
     private static final Pattern SPLIT_LETTER_GLUE = Pattern.compile("^([A-ZÅÄÖa-zåäö]\\d{2,4})([A-ZÅÄÖa-zåäö]{2,16})$");
     private static final Pattern SPLIT_DIGIT_GLUE = Pattern.compile("^(\\d{3})([A-ZÅÄÖa-zåäö]{2,16})$");
     private static final double AIR_DIST = 18.0;
-    private static final double VENT_DEDUPE = 12.0;
-    private static final double ROOM_DIST = 220.0;
+    private static final double VENT_DEDUPE = 22.0;
+    private static final double ROOM_DIST = 420.0;
+    private static final double ROOM_SURE = 220.0;
     private static final double UNSURE_CONFIDENCE = 0.6;
 
     private ProtocolBuilder() {
@@ -47,9 +48,9 @@ public final class ProtocolBuilder {
         List<Vent> vents = new ArrayList<Vent>();
         List<OcrToken> leftover = new ArrayList<OcrToken>();
         for (OcrToken token : tokens) {
-            Vent vent = LabelParser.parse(token.text, token.x, token.y, token.confidence);
-            if (vent != null) {
-                vents.add(vent);
+            List<Vent> parsed = LabelParser.parseAll(token.text, token.x, token.y, token.confidence);
+            if (!parsed.isEmpty()) {
+                vents.addAll(parsed);
             } else {
                 leftover.add(token);
             }
@@ -115,7 +116,16 @@ public final class ProtocolBuilder {
                 }
                 grouped.get(key).add(vent);
                 if (best != null) {
-                    confidence.put(key, best.confidence);
+                    double conf = bestD > ROOM_SURE ? Math.min(best.confidence, 0.5) : best.confidence;
+                    Double previous = confidence.get(key);
+                    confidence.put(key, previous == null ? conf : Math.min(previous, conf));
+                }
+            }
+            for (Room room : rooms) {
+                String key = room.label();
+                if (!grouped.containsKey(key)) {
+                    grouped.put(key, new ArrayList<Vent>());
+                    confidence.put(key, Math.min(room.confidence, 0.5));
                 }
             }
         }
@@ -158,6 +168,10 @@ public final class ProtocolBuilder {
         }
         int n = Math.max(exhaust.size(), supply.size());
         List<ProtocolRow> rows = new ArrayList<ProtocolRow>();
+        if (n == 0) {
+            rows.add(new ProtocolRow(label, "", null, null, "", null, null, true, "inget don i rummet", roomConf));
+            return rows;
+        }
         for (int i = 0; i < n; i++) {
             Vent ex = i < exhaust.size() ? exhaust.get(i) : null;
             Vent su = i < supply.size() ? supply.get(i) : null;
@@ -233,10 +247,12 @@ public final class ProtocolBuilder {
             int dup = -1;
             for (int i = 0; i < kept.size(); i++) {
                 Vent other = kept.get(i);
-                if (!other.canonicalName().equals(vent.canonicalName())) {
+                if (!other.canonicalName().equals(vent.canonicalName()) || other.qty != vent.qty) {
                     continue;
                 }
-                if (!eq(other.size, vent.size) || other.qty != vent.qty) {
+                boolean sameSize = eq(other.size, vent.size);
+                boolean oneMissing = other.size == null || other.size.isEmpty() || vent.size == null || vent.size.isEmpty();
+                if (!sameSize && !oneMissing) {
                     continue;
                 }
                 if (dist(other.x, other.y, vent.x, vent.y) <= VENT_DEDUPE) {
@@ -247,15 +263,22 @@ public final class ProtocolBuilder {
             if (dup < 0) {
                 kept.add(vent);
             } else {
-                Vent cur = kept.get(dup);
-                if (vent.airflow != null && cur.airflow == null) {
-                    kept.set(dup, vent);
-                } else if (vent.confidence > cur.confidence) {
-                    kept.set(dup, vent);
-                }
+                kept.set(dup, richer(kept.get(dup), vent));
             }
         }
         return kept;
+    }
+
+    private static Vent richer(Vent current, Vent extra) {
+        int currentScore = (current.airflow != null ? 2 : 0) + (current.size != null && !current.size.isEmpty() ? 1 : 0);
+        int extraScore = (extra.airflow != null ? 2 : 0) + (extra.size != null && !extra.size.isEmpty() ? 1 : 0);
+        if (extraScore > currentScore) {
+            return extra;
+        }
+        if (extraScore == currentScore && extra.confidence > current.confidence) {
+            return extra;
+        }
+        return current;
     }
 
     private static boolean eq(String a, String b) {

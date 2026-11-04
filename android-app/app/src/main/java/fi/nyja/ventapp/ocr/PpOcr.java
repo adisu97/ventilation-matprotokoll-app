@@ -67,7 +67,7 @@ public final class PpOcr implements AutoCloseable {
         List<OcrToken> tokens = new ArrayList<OcrToken>();
         float backX = width / (float) rw;
         float backY = height / (float) rh;
-        int limit = Math.min(boxes.size(), 80);
+        int limit = Math.min(boxes.size(), 240);
         for (int i = 0; i < limit; i++) {
             int[] box = boxes.get(i);
             int x0 = clamp((int) (box[0] * backX) - 2, 0, width - 1);

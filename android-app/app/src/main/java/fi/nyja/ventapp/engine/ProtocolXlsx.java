@@ -100,9 +100,10 @@ public final class ProtocolXlsx {
             workbook = dropPrototypeSheets(workbook);
             rels = rels.replaceAll("<Relationship[^>]*Target=\"/xl/worksheets/sheet[234]\\.xml\"[^>]*/>", "");
         }
-        zip.put("xl/workbook.xml", workbook.getBytes(StandardCharsets.UTF_8));
+        zip.put("xl/workbook.xml", ensureFullCalc(workbook).getBytes(StandardCharsets.UTF_8));
         zip.put("xl/_rels/workbook.xml.rels", rels.getBytes(StandardCharsets.UTF_8));
         zip.put("[Content_Types].xml", contentTypes.getBytes(StandardCharsets.UTF_8));
+        cacheFormulaResults(zip);
         return writeZip(zip);
     }
 
@@ -132,7 +133,8 @@ public final class ProtocolXlsx {
             r++;
         }
         int total = rows.isEmpty() ? 3 : rows.size() + 3;
-        data.append(totalRow(total, rows.isEmpty() ? 2 : 2, rows.isEmpty() ? 2 : rows.size() + 1, styles));
+        data.append(totalRow(total, rows.isEmpty() ? 2 : 2, rows.isEmpty() ? 2 : rows.size() + 1, styles,
+                sumBehov(rows, true), sumBehov(rows, false)));
         String sheetData = "<sheetData>" + header + data + "</sheetData>";
         if (prepared != null && prepared.contains("<sheetData>") && prepared.contains("</sheetData>")) {
             int start = prepared.indexOf("<sheetData>");
@@ -255,28 +257,39 @@ public final class ProtocolXlsx {
         if (!data.exhaustName.isEmpty()) {
             cell(xml, 3, row, data.exhaustName, style);
             cell(xml, 4, row, data.exhaustSize, style);
-            cell(xml, 5, row, num(data.exhaustBehov), style);
+            numberCell(xml, 5, row, num(data.exhaustBehov), style);
         }
         if (!data.supplyName.isEmpty()) {
             cell(xml, 9, row, data.supplyName, style);
             cell(xml, 10, row, data.supplySize, style);
-            cell(xml, 11, row, num(data.supplyBehov), style);
+            numberCell(xml, 11, row, num(data.supplyBehov), style);
         }
         xml.append("</row>");
         return xml.toString();
     }
 
-    private static String totalRow(int row, int from, int to, String styles) {
+    private static String totalRow(int row, int from, int to, String styles, double exhaustBehov, double supplyBehov) {
         String[] style = styles.split(",");
         StringBuilder xml = new StringBuilder();
         xml.append("<row r=\"").append(row).append("\">");
         cell(xml, 1, row, "Kokonaisilmamäärät/Totalt", style);
-        formula(xml, 5, row, "SUM(E" + from + ":E" + to + ")", style);
-        formula(xml, 6, row, "SUM(F" + from + ":F" + to + ")", style);
-        formula(xml, 11, row, "SUM(K" + from + ":K" + to + ")", style);
-        formula(xml, 12, row, "SUM(L" + from + ":L" + to + ")", style);
+        formula(xml, 5, row, "SUM(E" + from + ":E" + to + ")", style, exhaustBehov);
+        formula(xml, 6, row, "SUM(F" + from + ":F" + to + ")", style, 0);
+        formula(xml, 11, row, "SUM(K" + from + ":K" + to + ")", style, supplyBehov);
+        formula(xml, 12, row, "SUM(L" + from + ":L" + to + ")", style, 0);
         xml.append("</row>");
         return xml.toString();
+    }
+
+    private static double sumBehov(List<ProtocolRow> rows, boolean exhaust) {
+        double sum = 0;
+        for (ProtocolRow row : rows) {
+            Double value = exhaust ? row.exhaustBehov : row.supplyBehov;
+            if (value != null) {
+                sum += value;
+            }
+        }
+        return sum;
     }
 
     private static void cell(StringBuilder xml, int col, int row, String value, String[] style) {
@@ -289,10 +302,106 @@ public final class ProtocolXlsx {
                 .append(esc(value)).append("</t></is></c>");
     }
 
-    private static void formula(StringBuilder xml, int col, int row, String formula, String[] style) {
+    private static void numberCell(StringBuilder xml, int col, int row, String value, String[] style) {
+        if (value == null || value.isEmpty()) {
+            return;
+        }
         String s = style.length >= col ? style[col - 1] : "0";
         xml.append("<c r=\"").append(cellRef(col, row)).append("\" s=\"").append(s)
-                .append("\"><f>").append(esc(formula)).append("</f></c>");
+                .append("\"><v>").append(esc(value)).append("</v></c>");
+    }
+
+    private static void formula(StringBuilder xml, int col, int row, String formula, String[] style, double cached) {
+        String s = style.length >= col ? style[col - 1] : "0";
+        xml.append("<c r=\"").append(cellRef(col, row)).append("\" s=\"").append(s)
+                .append("\"><f>").append(esc(formula)).append("</f><v>")
+                .append(num(cached)).append("</v></c>");
+    }
+
+    private static String ensureFullCalc(String workbook) {
+        if (workbook.contains("fullCalcOnLoad=\"1\"")) {
+            return workbook;
+        }
+        if (workbook.contains("fullCalcOnLoad=\"0\"")) {
+            return workbook.replace("fullCalcOnLoad=\"0\"", "fullCalcOnLoad=\"1\"");
+        }
+        if (workbook.contains("<calcPr")) {
+            return workbook.replace("<calcPr", "<calcPr fullCalcOnLoad=\"1\" ");
+        }
+        return workbook.replace("</workbook>", "<calcPr fullCalcOnLoad=\"1\"/></workbook>");
+    }
+
+    /** Viewers that skip calculation still show the cached number in <v>. */
+    private static void cacheFormulaResults(Map<String, byte[]> zip) {
+        for (Map.Entry<String, byte[]> entry : new ArrayList<Map.Entry<String, byte[]>>(zip.entrySet())) {
+            String name = entry.getKey();
+            if (!name.startsWith("xl/worksheets/") || !name.endsWith(".xml")) {
+                continue;
+            }
+            String xml = new String(entry.getValue(), StandardCharsets.UTF_8);
+            if (!xml.contains("<f>")) {
+                continue;
+            }
+            zip.put(name, fillEmptyFormulaValues(xml).getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    private static String fillEmptyFormulaValues(String xml) {
+        Matcher cells = Pattern.compile("(?s)<c r=\"([A-Z]+)(\\d+)\"([^>]*)>(.*?)</c>").matcher(xml);
+        Map<String, Double> numbers = new LinkedHashMap<String, Double>();
+        while (cells.find()) {
+            String body = cells.group(4);
+            if (body.contains("<f>")) {
+                continue;
+            }
+            Matcher value = Pattern.compile("<v>(-?\\d+(?:\\.\\d+)?)</v>").matcher(body);
+            if (value.find()) {
+                numbers.put(cells.group(1) + cells.group(2), Double.valueOf(value.group(1)));
+            }
+        }
+        Matcher formulas = Pattern.compile(
+                "(?s)<f>(SUM\\(([A-Z]+)(\\d+):([A-Z]+)(\\d+)\\))</f>(<v\\s*/>|<v>\\s*</v>|<v>-?\\d+(?:\\.\\d+)?</v>)?")
+                .matcher(xml);
+        StringBuffer out = new StringBuffer();
+        while (formulas.find()) {
+            String cached = formulas.group(6);
+            if (cached != null && cached.matches("<v>-?\\d+(?:\\.\\d+)?</v>")) {
+                formulas.appendReplacement(out, Matcher.quoteReplacement(formulas.group(0)));
+                continue;
+            }
+            double sum = sumRange(numbers, formulas.group(2), Integer.parseInt(formulas.group(3)),
+                    formulas.group(4), Integer.parseInt(formulas.group(5)));
+            String replacement = "<f>" + formulas.group(1) + "</f><v>" + num(sum) + "</v>";
+            formulas.appendReplacement(out, Matcher.quoteReplacement(replacement));
+        }
+        formulas.appendTail(out);
+        return out.toString();
+    }
+
+    private static double sumRange(Map<String, Double> numbers, String colFrom, int rowFrom, String colTo, int rowTo) {
+        int startCol = columnIndex(colFrom);
+        int endCol = columnIndex(colTo);
+        double sum = 0;
+        for (Map.Entry<String, Double> entry : numbers.entrySet()) {
+            Matcher ref = Pattern.compile("([A-Z]+)(\\d+)").matcher(entry.getKey());
+            if (!ref.matches()) {
+                continue;
+            }
+            int col = columnIndex(ref.group(1));
+            int row = Integer.parseInt(ref.group(2));
+            if (col >= startCol && col <= endCol && row >= rowFrom && row <= rowTo) {
+                sum += entry.getValue();
+            }
+        }
+        return sum;
+    }
+
+    private static int columnIndex(String letters) {
+        int n = 0;
+        for (int i = 0; i < letters.length(); i++) {
+            n = n * 26 + (letters.charAt(i) - 'A' + 1);
+        }
+        return n;
     }
 
     private static String unsureXml(List<ProtocolRow> rows, List<String> sources) {

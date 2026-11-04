@@ -2,6 +2,8 @@ package fi.nyja.ventapp.engine;
 
 import org.junit.Test;
 
+import fi.nyja.ventapp.PdfTextLayer;
+
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -59,6 +61,119 @@ public class ProtocolLogicTest {
         assertEquals("Ky", roomNamed(rooms, "E201").name);
         assertEquals("TS", roomNamed(rooms, "130").name);
         assertEquals("Terrass", roomNamed(rooms, "E140").name);
+    }
+
+    @Test
+    public void oneLineCanHoldSeveralVentsAndSplitWords() {
+        assertEquals(2, LabelParser.parseAll("KSO-125-C -20 KTS-100 +20", 0, 0, 1).size());
+        Vent spaced = LabelParser.parse("KSO 125", 0, 0, 1);
+        assertNotNull(spaced);
+        assertEquals("kso", spaced.canonicalName());
+        assertEquals("125", spaced.size);
+        Vent dashed = LabelParser.parse("KSO–125", 0, 0, 1);
+        assertNotNull(dashed);
+        assertEquals("125", dashed.size);
+        List<OcrToken> merged = TokenCleanup.prepare(Arrays.asList(
+                new OcrToken("KSO-125 -20", 20, 10, 1, 36, 8),
+                new OcrToken("KTS-160 +20", 52, 10, 1, 30, 8),
+                new OcrToken("2x", 10, 40, 1, 8, 6),
+                new OcrToken("EAGLE", 24, 40, 1, 22, 6),
+                new OcrToken("200-600", 52, 40, 1, 28, 6)));
+        assertEquals(3, merged.size());
+        List<Vent> vents = ProtocolBuilder.ventsFromTokens(merged);
+        assertEquals(3, vents.size());
+        boolean eagle = false;
+        for (Vent vent : vents) {
+            if ("eagle".equals(vent.canonicalName())) {
+                eagle = true;
+                assertEquals(2, vent.qty);
+                assertEquals("200-600", vent.size);
+            }
+        }
+        assertTrue(eagle);
+    }
+
+    @Test
+    public void roomWithoutAVentIsKeptAsUnsure() {
+        List<ProtocolRow> rows = ProtocolBuilder.pair(
+                Collections.singletonList(new Room("E140", "Terrass", 0, 0, 0.9)),
+                Collections.<Vent>emptyList());
+        assertEquals(1, rows.size());
+        assertEquals("E140 Terrass", rows.get(0).room);
+        assertTrue(rows.get(0).unsure);
+        assertTrue(rows.get(0).unsureReason.contains("inget don"));
+    }
+
+    @Test
+    public void samplePdfTextLayerKeepsRoomsVentsAndRotatedText() throws Exception {
+        File pdf = new File("../../tests/fixtures/mini_ritning.pdf");
+        if (!pdf.isFile()) {
+            pdf = new File("../tests/fixtures/mini_ritning.pdf");
+        }
+        assertTrue(pdf.isFile());
+        PdfTextLayer.Result text = PdfTextLayer.read(java.nio.file.Files.readAllBytes(pdf.toPath()));
+        assertNull(text.error);
+        List<OcrToken> prepared = TokenCleanup.prepare(text.tokens);
+        List<Room> rooms = ProtocolBuilder.roomsFromTokens(prepared);
+        List<Vent> vents = ProtocolBuilder.ventsFromTokens(prepared);
+        assertTrue(rooms.size() >= 2);
+        assertEquals("WC", roomNamed(rooms, "E125").name);
+        assertEquals("AULA", roomNamed(rooms, "E102").name);
+        assertTrue(vents.size() >= 3);
+        assertTrue(hasVent(vents, "kso"));
+        assertTrue(hasVent(vents, "kts"));
+        assertTrue(hasVent(vents, "eagle"));
+
+        com.tom_roush.pdfbox.pdmodel.PDDocument doc = new com.tom_roush.pdfbox.pdmodel.PDDocument();
+        com.tom_roush.pdfbox.pdmodel.PDPage first = new com.tom_roush.pdfbox.pdmodel.PDPage(
+                com.tom_roush.pdfbox.pdmodel.common.PDRectangle.A4);
+        com.tom_roush.pdfbox.pdmodel.PDPage second = new com.tom_roush.pdfbox.pdmodel.PDPage(
+                com.tom_roush.pdfbox.pdmodel.common.PDRectangle.A4);
+        doc.addPage(first);
+        doc.addPage(second);
+        writeLine(doc, first, "E301 WC", 72, 700, false);
+        writeLine(doc, second, "E302", 72, 700, false);
+        writeLine(doc, second, "KSO-160", 140, 500, true);
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        doc.save(buf);
+        doc.close();
+        PdfTextLayer.Result both = PdfTextLayer.read(buf.toByteArray());
+        assertNull(both.error);
+        StringBuilder seen = new StringBuilder();
+        for (OcrToken token : both.tokens) {
+            seen.append(token.text).append('\n');
+        }
+        String all = seen.toString().toUpperCase();
+        assertTrue(all, all.contains("E301"));
+        assertTrue(all, all.contains("E302"));
+        assertTrue(all, all.contains("KSO-160") || all.contains("KSO"));
+    }
+
+    private static void writeLine(com.tom_roush.pdfbox.pdmodel.PDDocument doc,
+            com.tom_roush.pdfbox.pdmodel.PDPage page, String text, float x, float y, boolean rotated)
+            throws Exception {
+        com.tom_roush.pdfbox.pdmodel.PDPageContentStream stream =
+                new com.tom_roush.pdfbox.pdmodel.PDPageContentStream(doc, page,
+                        com.tom_roush.pdfbox.pdmodel.PDPageContentStream.AppendMode.APPEND, true);
+        stream.beginText();
+        stream.setFont(com.tom_roush.pdfbox.pdmodel.font.PDType1Font.HELVETICA, 12);
+        if (rotated) {
+            stream.setTextMatrix(0, 1, -1, 0, x, y);
+        } else {
+            stream.newLineAtOffset(x, y);
+        }
+        stream.showText(text);
+        stream.endText();
+        stream.close();
+    }
+
+    private static boolean hasVent(List<Vent> vents, String name) {
+        for (Vent vent : vents) {
+            if (name.equals(vent.canonicalName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Test
@@ -203,6 +318,15 @@ public class ProtocolLogicTest {
         assertTrue(plan.contains(">AULA</t>"));
         assertTrue(plan.contains("Kokonaisilmamäärät/Totalt"));
         assertTrue(plan.contains("SUM(E2:E4)"));
+        assertTrue(plan.contains("<v>35</v>"));
+        assertTrue(plan.contains("<v>20</v>"));
+        assertTrue(plan.contains("<v>0</v>"));
+        String workbookXml = zipText(xlsx, "xl/workbook.xml");
+        assertTrue(workbookXml.contains("fullCalcOnLoad=\"1\""));
+        String cover = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Yhteensä Totalt");
+        assertTrue(cover.contains("<v>0</v>"));
+        assertFalse(cover.contains("<v />"));
+        assertFalse(cover.contains("<v/>"));
         String unsureSheet = zipEntryContaining(xlsx, "xl/worksheets/sheet", "storlek saknas");
         assertTrue(unsureSheet.contains("E102 AULA"));
     }

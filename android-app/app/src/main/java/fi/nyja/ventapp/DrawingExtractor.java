@@ -71,8 +71,16 @@ public final class DrawingExtractor {
                     }, debug, notes);
                     List<Room> rooms = ProtocolBuilder.roomsFromTokens(tokens);
                     List<Vent> vents = ProtocolBuilder.ventsFromTokens(tokens);
-                    debug.append("rum=").append(rooms.size()).append(" don=").append(vents.size()).append("\n\n");
                     List<ProtocolRow> rows = ProtocolBuilder.pair(rooms, vents);
+                    int unsure = 0;
+                    for (ProtocolRow row : rows) {
+                        if (row.unsure) {
+                            unsure++;
+                        }
+                    }
+                    debug.append("rum: ").append(rooms.size()).append("\n");
+                    debug.append("don: ").append(vents.size()).append("\n");
+                    debug.append("osäkra: ").append(unsure).append("\n\n");
                     String sheet = SheetNames.fromFileName(entry.name, usedNames);
                     usedNames.add(sheet);
                     sheets.add(new ProtocolXlsx.DrawingSheet(sheet, rows));
@@ -200,6 +208,7 @@ public final class DrawingExtractor {
                 String message = label + ": textlagret kunde inte läsas: " + text.error;
                 notes.add(message);
                 debug.append(message).append("\n");
+                debug.append("textlager: 0 ord\n");
             } else {
                 tokens.addAll(text.tokens);
                 debug.append("textlager: ").append(text.tokens.size()).append(" ord\n");
@@ -211,7 +220,9 @@ public final class DrawingExtractor {
             String message = label + ": textlagret kunde inte läsas: " + message(ex);
             notes.add(message);
             debug.append(message).append("\n");
+            debug.append("textlager: 0 ord\n");
         }
+        int beforeOcr = tokens.size();
         try {
             PdfRenderer renderer = new PdfRenderer(fd);
             try {
@@ -219,14 +230,8 @@ public final class DrawingExtractor {
             for (int p = 0; p < pages; p++) {
                 PdfRenderer.Page page = renderer.openPage(p);
                 try {
-                    float scale = 3f;
-                    float longest = Math.max(page.getWidth(), page.getHeight()) * scale;
-                    if (longest > 9000f) {
-                        scale *= 9000f / longest;
-                    }
-                    if (scale < 2f) {
-                        scale = 2f;
-                    }
+                    float longestPt = Math.max(page.getWidth(), page.getHeight());
+                    float scale = longestPt > 2800f ? 3.2f : 4f;
                     int fullW = Math.max(1, Math.round(page.getWidth() * scale));
                     int fullH = Math.max(1, Math.round(page.getHeight() * scale));
                     debug.append("pdf sida ").append(p + 1).append(" skala=").append(scale)
@@ -276,10 +281,12 @@ public final class DrawingExtractor {
             } finally {
                 renderer.close();
             }
+            debug.append("OCR-rutor: ").append(tokens.size() - beforeOcr).append("\n");
         } catch (Exception ex) {
             String message = label + ": sidan kunde inte ritas: " + message(ex);
             notes.add(message);
             debug.append(message).append("\n");
+            debug.append("OCR-rutor: ").append(tokens.size() - beforeOcr).append("\n");
         }
         return tokens;
     }

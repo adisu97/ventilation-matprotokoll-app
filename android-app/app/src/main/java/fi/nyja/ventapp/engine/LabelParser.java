@@ -106,6 +106,39 @@ public final class LabelParser {
         return new Vent(name, kind, size, abs, qty, x, y, raw, confidence);
     }
 
+    /** Every vent label in one line, including 2xEAGLE and a second product after the first. */
+    public static java.util.List<Vent> parseAll(String text, double x, double y, double confidence) {
+        java.util.List<Vent> found = new java.util.ArrayList<Vent>();
+        if (text == null || text.trim().isEmpty()) {
+            return found;
+        }
+        String norm = normalize(text);
+        Matcher match = catalog.productPattern().matcher(norm);
+        java.util.List<Integer> starts = new java.util.ArrayList<Integer>();
+        while (match.find()) {
+            if (!starts.isEmpty() && match.start() < starts.get(starts.size() - 1)) {
+                continue;
+            }
+            starts.add(match.start());
+        }
+        if (starts.isEmpty()) {
+            Vent one = parse(text, x, y, confidence);
+            if (one != null) {
+                found.add(one);
+            }
+            return found;
+        }
+        for (int i = 0; i < starts.size(); i++) {
+            int from = starts.get(i);
+            int to = i + 1 < starts.size() ? starts.get(i + 1) : norm.length();
+            Vent vent = parse(norm.substring(from, to).trim(), x, y, confidence);
+            if (vent != null) {
+                found.add(vent);
+            }
+        }
+        return found;
+    }
+
     public static String classify(String name, Double airflow, boolean signed) {
         return catalog.classify(name, airflow, signed);
     }
