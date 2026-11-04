@@ -9,11 +9,17 @@ import java.util.regex.Pattern;
 
 /** Pair vents into protocol rows and collect uncertain rows. */
 public final class ProtocolBuilder {
-    private static final Pattern ROOM_NUM = Pattern.compile("^[A-ZÅÄÖ][0-9]{2,4}[A-Za-z]{0,2}$");
+    private static final Pattern ROOM_NUM = Pattern.compile("^[A-ZÅÄÖ][0-9]{2,4}[A-Za-z]?$");
     private static final Pattern PLAIN_ROOM = Pattern.compile("^\\d{3}[A-Za-z]?$");
+    private static final Pattern ROOM_INSIDE = Pattern.compile("(?<![A-ZÅÄÖ0-9])([A-ZÅÄÖ][0-9]{2,4})(?![A-ZÅÄÖ0-9])");
+    private static final Pattern SPLIT_LETTER_SPACE = Pattern.compile("^([A-ZÅÄÖa-zåäö]\\d{2,4})\\s+([A-ZÅÄÖa-zåäö]{2,24})$");
+    private static final Pattern SPLIT_DIGIT_SPACE = Pattern.compile("^(\\d{2,4})\\s+([A-ZÅÄÖa-zåäö]{2,24})$");
+    private static final Pattern SPLIT_LETTER_GLUE = Pattern.compile("^([A-ZÅÄÖa-zåäö]\\d{2,4})([A-ZÅÄÖa-zåäö]{2,16})$");
+    private static final Pattern SPLIT_DIGIT_GLUE = Pattern.compile("^(\\d{3})([A-ZÅÄÖa-zåäö]{2,16})$");
     private static final double AIR_DIST = 18.0;
-    private static final double VENT_DEDUPE = 12.0;
-    private static final double ROOM_DIST = 220.0;
+    private static final double VENT_DEDUPE = 22.0;
+    private static final double ROOM_DIST = 420.0;
+    private static final double ROOM_SURE = 220.0;
     private static final double UNSURE_CONFIDENCE = 0.6;
 
     private ProtocolBuilder() {
@@ -24,25 +30,27 @@ public final class ProtocolBuilder {
         for (int i = 0; i < tokens.size(); i++) {
             OcrToken token = tokens.get(i);
             String text = token.text.trim();
-            if (!ROOM_NUM.matcher(text).matches() && !PLAIN_ROOM.matcher(text).matches()) {
+            RoomText parts = splitRoom(text);
+            if (parts == null) {
                 continue;
             }
-            if (LabelParser.parse(text, token.x, token.y, token.confidence) != null) {
+            if (parts.name.isEmpty() && parts.number.equalsIgnoreCase(text)
+                    && LabelParser.parse(text, token.x, token.y, token.confidence) != null) {
                 continue;
             }
-            String name = nearbyName(tokens, token);
-            rooms.add(new Room(text, name, token.x, token.y, token.confidence));
+            String name = parts.name.isEmpty() ? nearbyName(tokens, token) : parts.name;
+            rooms.add(new Room(parts.number, name, token.x, token.y, token.confidence));
         }
-        return rooms;
+        return mergeCloseRooms(rooms);
     }
 
     public static List<Vent> ventsFromTokens(List<OcrToken> tokens) {
         List<Vent> vents = new ArrayList<Vent>();
         List<OcrToken> leftover = new ArrayList<OcrToken>();
         for (OcrToken token : tokens) {
-            Vent vent = LabelParser.parse(token.text, token.x, token.y, token.confidence);
-            if (vent != null) {
-                vents.add(vent);
+            List<Vent> parsed = LabelParser.parseAll(token.text, token.x, token.y, token.confidence);
+            if (!parsed.isEmpty()) {
+                vents.addAll(parsed);
             } else {
                 leftover.add(token);
             }
@@ -108,7 +116,16 @@ public final class ProtocolBuilder {
                 }
                 grouped.get(key).add(vent);
                 if (best != null) {
-                    confidence.put(key, best.confidence);
+                    double conf = bestD > ROOM_SURE ? Math.min(best.confidence, 0.5) : best.confidence;
+                    Double previous = confidence.get(key);
+                    confidence.put(key, previous == null ? conf : Math.min(previous, conf));
+                }
+            }
+            for (Room room : rooms) {
+                String key = room.label();
+                if (!grouped.containsKey(key)) {
+                    grouped.put(key, new ArrayList<Vent>());
+                    confidence.put(key, Math.min(room.confidence, 0.5));
                 }
             }
         }
@@ -151,6 +168,10 @@ public final class ProtocolBuilder {
         }
         int n = Math.max(exhaust.size(), supply.size());
         List<ProtocolRow> rows = new ArrayList<ProtocolRow>();
+        if (n == 0) {
+            rows.add(new ProtocolRow(label, "", null, null, "", null, null, true, "inget don i rummet", roomConf));
+            return rows;
+        }
         for (int i = 0; i < n; i++) {
             Vent ex = i < exhaust.size() ? exhaust.get(i) : null;
             Vent su = i < supply.size() ? supply.get(i) : null;
@@ -226,10 +247,12 @@ public final class ProtocolBuilder {
             int dup = -1;
             for (int i = 0; i < kept.size(); i++) {
                 Vent other = kept.get(i);
-                if (!other.canonicalName().equals(vent.canonicalName())) {
+                if (!other.canonicalName().equals(vent.canonicalName()) || other.qty != vent.qty) {
                     continue;
                 }
-                if (!eq(other.size, vent.size) || other.qty != vent.qty) {
+                boolean sameSize = eq(other.size, vent.size);
+                boolean oneMissing = other.size == null || other.size.isEmpty() || vent.size == null || vent.size.isEmpty();
+                if (!sameSize && !oneMissing) {
                     continue;
                 }
                 if (dist(other.x, other.y, vent.x, vent.y) <= VENT_DEDUPE) {
@@ -240,15 +263,22 @@ public final class ProtocolBuilder {
             if (dup < 0) {
                 kept.add(vent);
             } else {
-                Vent cur = kept.get(dup);
-                if (vent.airflow != null && cur.airflow == null) {
-                    kept.set(dup, vent);
-                } else if (vent.confidence > cur.confidence) {
-                    kept.set(dup, vent);
-                }
+                kept.set(dup, richer(kept.get(dup), vent));
             }
         }
         return kept;
+    }
+
+    private static Vent richer(Vent current, Vent extra) {
+        int currentScore = (current.airflow != null ? 2 : 0) + (current.size != null && !current.size.isEmpty() ? 1 : 0);
+        int extraScore = (extra.airflow != null ? 2 : 0) + (extra.size != null && !extra.size.isEmpty() ? 1 : 0);
+        if (extraScore > currentScore) {
+            return extra;
+        }
+        if (extraScore == currentScore && extra.confidence > current.confidence) {
+            return extra;
+        }
+        return current;
     }
 
     private static boolean eq(String a, String b) {
@@ -257,36 +287,120 @@ public final class ProtocolBuilder {
         return left.equals(right);
     }
 
+    public static final class RoomText {
+        public final String number;
+        public final String name;
+
+        public RoomText(String number, String name) {
+            this.number = number == null ? "" : number;
+            this.name = name == null ? "" : name;
+        }
+    }
+
+    /** Number and name from one string, for example E125 WC, 125WC or 102AULA. */
+    public static RoomText splitRoom(String text) {
+        if (text == null) {
+            return null;
+        }
+        String raw = text.trim();
+        if (raw.isEmpty() || raw.length() > 40) {
+            return null;
+        }
+        java.util.regex.Matcher spaced = SPLIT_LETTER_SPACE.matcher(raw);
+        if (!spaced.matches()) {
+            spaced = SPLIT_DIGIT_SPACE.matcher(raw);
+        }
+        if (spaced.matches()) {
+            String name = roomName(spaced.group(2));
+            if (name == null) {
+                return new RoomText(spaced.group(1).toUpperCase(Locale.ROOT), "");
+            }
+            return new RoomText(spaced.group(1).toUpperCase(Locale.ROOT), name);
+        }
+        java.util.regex.Matcher glued = SPLIT_LETTER_GLUE.matcher(raw);
+        if (!glued.matches()) {
+            glued = SPLIT_DIGIT_GLUE.matcher(raw);
+        }
+        if (glued.matches()) {
+            String name = roomName(glued.group(2));
+            if (name != null) {
+                return new RoomText(glued.group(1).toUpperCase(Locale.ROOT), name);
+            }
+        }
+        String upper = raw.toUpperCase(Locale.ROOT);
+        if (ROOM_NUM.matcher(upper).matches() || PLAIN_ROOM.matcher(upper).matches()) {
+            return new RoomText(upper, "");
+        }
+        java.util.regex.Matcher inside = ROOM_INSIDE.matcher(upper);
+        if (inside.find()) {
+            return new RoomText(inside.group(1), "");
+        }
+        return null;
+    }
+
+    static String roomNumber(String text) {
+        RoomText parts = splitRoom(text);
+        if (parts == null || parts.number.isEmpty()) {
+            return null;
+        }
+        return parts.number;
+    }
+
+    private static String roomName(String text) {
+        if (text == null) {
+            return null;
+        }
+        String name = text.trim();
+        if (name.length() < 2 || name.length() > 24) {
+            return null;
+        }
+        for (int i = 0; i < name.length(); i++) {
+            if (!Character.isLetter(name.charAt(i))) {
+                return null;
+            }
+        }
+        if (LabelParser.parse(name, 0, 0, 1) != null) {
+            return null;
+        }
+        return name;
+    }
+
+    private static List<Room> mergeCloseRooms(List<Room> rooms) {
+        List<Room> kept = new ArrayList<Room>();
+        for (Room room : rooms) {
+            int hit = -1;
+            for (int i = 0; i < kept.size(); i++) {
+                Room other = kept.get(i);
+                if (other.number.equalsIgnoreCase(room.number) && dist(other.x, other.y, room.x, room.y) < 30) {
+                    hit = i;
+                    break;
+                }
+            }
+            if (hit < 0) {
+                kept.add(room);
+            } else if (kept.get(hit).name.isEmpty() && !room.name.isEmpty()) {
+                kept.set(hit, room);
+            }
+        }
+        return kept;
+    }
+
     private static String nearbyName(List<OcrToken> tokens, OcrToken room) {
         String best = "";
-        double bestD = 36;
+        double bestD = 42;
         for (OcrToken token : tokens) {
             if (token == room) {
                 continue;
             }
             String text = token.text.trim();
-            if (text.length() < 2 || text.length() > 24) {
-                continue;
-            }
-            if (ROOM_NUM.matcher(text).matches() || PLAIN_ROOM.matcher(text).matches()) {
-                continue;
-            }
-            if (LabelParser.parse(text, token.x, token.y, token.confidence) != null) {
-                continue;
-            }
-            int letters = 0;
-            for (int i = 0; i < text.length(); i++) {
-                if (Character.isLetter(text.charAt(i))) {
-                    letters++;
-                }
-            }
-            if (letters < 2) {
+            String name = roomName(text);
+            if (name == null) {
                 continue;
             }
             double d = dist(room.x, room.y, token.x, token.y);
-            if (token.y >= room.y - 4 && d < bestD) {
+            if (d < bestD) {
                 bestD = d;
-                best = text.toLowerCase(Locale.ROOT);
+                best = name;
             }
         }
         return best;

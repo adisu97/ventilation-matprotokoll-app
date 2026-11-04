@@ -7,9 +7,7 @@ import java.util.regex.Pattern;
 /** Port of matprotokoll/labels.py for vent labels. */
 public final class LabelParser {
     private static final int[] SIZES = {630, 500, 450, 400, 355, 315, 250, 200, 160, 125, 100, 80};
-    private static final Pattern PRODUCT = Pattern.compile(
-            "(?:(\\d{1,2})\\s*[xX×*]\\s*)?(PELICAN|EAGLE|DYKH|CLIK|KTS-360|KTS|KSO|HFK|ALG|PRA|HUK|HU(?=[-/\\s]\\d))",
-            Pattern.CASE_INSENSITIVE);
+    private static volatile VentCatalog catalog = VentCatalog.defaults();
     private static final Pattern AIR = Pattern.compile(
             "(?<![A-Z0-9])([+-])\\s*(\\d{1,4})(?:\\s*(?:l\\s*/\\s*s|l/s|ls))?",
             Pattern.CASE_INSENSITIVE);
@@ -18,6 +16,14 @@ public final class LabelParser {
     private static final Pattern NOISE = Pattern.compile("\\b(SP1|YL[OÖ]S|CIRCO|DOUBLE|PP\\d+|AV\\d+|IVL|KANAV|TUULET)\\b", Pattern.CASE_INSENSITIVE);
 
     private LabelParser() {
+    }
+
+    public static VentCatalog current() {
+        return catalog;
+    }
+
+    public static void use(VentCatalog names) {
+        catalog = names == null ? VentCatalog.defaults() : names;
     }
 
     public static String normalize(String text) {
@@ -42,32 +48,41 @@ public final class LabelParser {
         }
         String raw = text.trim();
         String upper = raw.toUpperCase(Locale.ROOT);
-        if (NOISE.matcher(raw).find()
-                && !upper.contains("KSO") && !upper.contains("KTS")
-                && !upper.contains("EAGLE") && !upper.contains("PELICAN") && !upper.contains("ALG")) {
+        if (NOISE.matcher(raw).find() && !catalog.containsFolded(upper)) {
             return null;
         }
         String norm = normalize(raw);
-        Matcher match = PRODUCT.matcher(norm);
-        if (!match.find()) {
-            return null;
-        }
-        String name = match.group(2).toLowerCase(Locale.ROOT);
-        if ("hu".equals(name) && (norm.matches(".*[A-Z]HU.*") || norm.matches(".*HU[A-Z].*"))) {
-            return null;
-        }
+        Matcher match = catalog.productPattern().matcher(norm);
+        String token;
+        String name;
+        String rest;
         int qty = 1;
-        if (match.group(1) != null) {
-            try {
-                qty = Integer.parseInt(match.group(1));
-            } catch (NumberFormatException ignored) {
-                qty = 1;
+        if (match.find()) {
+            token = match.group(2).toUpperCase(Locale.ROOT);
+            name = catalog.storeName(token);
+            if ("hu".equals(name) && !token.startsWith("HUK")
+                    && (norm.matches(".*[A-Z]HU.*") || norm.matches(".*HU[A-Z].*"))) {
+                return null;
             }
+            if (match.group(1) != null) {
+                try {
+                    qty = Integer.parseInt(match.group(1));
+                } catch (NumberFormatException ignored) {
+                    qty = 1;
+                }
+            }
+            rest = norm.substring(match.end());
+        } else {
+            VentCatalog.Hit hit = catalog.fuzzyHit(norm);
+            if (hit == null) {
+                return null;
+            }
+            name = catalog.storeName(hit.key);
+            rest = norm.substring(Math.min(hit.end, norm.length()));
         }
         if (qty < 1 || qty > 12) {
             qty = 1;
         }
-        String rest = norm.substring(match.end());
         String size = sizeFromRest(rest, name);
         Double airflow = null;
         boolean signed = false;
@@ -87,37 +102,45 @@ public final class LabelParser {
         if (kind == null) {
             return null;
         }
-        String store = "huk".equals(name) ? "hu" : name;
         Double abs = airflow == null ? null : Math.abs(airflow);
-        return new Vent(store, kind, size, abs, qty, x, y, raw, confidence);
+        return new Vent(name, kind, size, abs, qty, x, y, raw, confidence);
+    }
+
+    /** Every vent label in one line, including 2xEAGLE and a second product after the first. */
+    public static java.util.List<Vent> parseAll(String text, double x, double y, double confidence) {
+        java.util.List<Vent> found = new java.util.ArrayList<Vent>();
+        if (text == null || text.trim().isEmpty()) {
+            return found;
+        }
+        String norm = normalize(text);
+        Matcher match = catalog.productPattern().matcher(norm);
+        java.util.List<Integer> starts = new java.util.ArrayList<Integer>();
+        while (match.find()) {
+            if (!starts.isEmpty() && match.start() < starts.get(starts.size() - 1)) {
+                continue;
+            }
+            starts.add(match.start());
+        }
+        if (starts.isEmpty()) {
+            Vent one = parse(text, x, y, confidence);
+            if (one != null) {
+                found.add(one);
+            }
+            return found;
+        }
+        for (int i = 0; i < starts.size(); i++) {
+            int from = starts.get(i);
+            int to = i + 1 < starts.size() ? starts.get(i + 1) : norm.length();
+            Vent vent = parse(norm.substring(from, to).trim(), x, y, confidence);
+            if (vent != null) {
+                found.add(vent);
+            }
+        }
+        return found;
     }
 
     public static String classify(String name, Double airflow, boolean signed) {
-        String n = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
-        if ("kts-360".equals(n)) {
-            n = "kts";
-        }
-        if (isExhaustOnly(n)) {
-            return "exhaust";
-        }
-        if (isSupplyOnly(n)) {
-            return "supply";
-        }
-        if (signed && airflow != null) {
-            if (airflow < 0) {
-                return "exhaust";
-            }
-            if (airflow > 0) {
-                return "supply";
-            }
-        }
-        if ("hfk".equals(n)) {
-            return "exhaust";
-        }
-        if ("dykh".equals(n) || "clik".equals(n)) {
-            return "supply";
-        }
-        return null;
+        return catalog.classify(name, airflow, signed);
     }
 
     public static Airflow parseAirflowToken(String text) {
@@ -156,14 +179,6 @@ public final class LabelParser {
             }
         }
         return false;
-    }
-
-    private static boolean isExhaustOnly(String n) {
-        return "kso".equals(n) || "alg".equals(n) || "pra".equals(n) || "huk".equals(n) || "hu".equals(n);
-    }
-
-    private static boolean isSupplyOnly(String n) {
-        return "kts".equals(n) || "eagle".equals(n) || "pelican".equals(n);
     }
 
     private static String sizeFromRest(String rest, String name) {
