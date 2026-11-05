@@ -53,7 +53,6 @@ public class MainActivity extends Activity {
     private EditText excelName;
     private LinearLayout fileList;
     private TextView emptyList;
-    private TextView percentView;
     private ProgressBar progressBar;
     private TextView statusView;
     private TextView etaView;
@@ -120,7 +119,6 @@ public class MainActivity extends Activity {
         excelName = findViewById(R.id.excelName);
         fileList = findViewById(R.id.fileList);
         emptyList = findViewById(R.id.emptyList);
-        percentView = findViewById(R.id.percent);
         progressBar = findViewById(R.id.progress);
         statusView = findViewById(R.id.status);
         etaView = findViewById(R.id.eta);
@@ -129,7 +127,7 @@ public class MainActivity extends Activity {
         startButton = findViewById(R.id.start);
         downloadButton = findViewById(R.id.download);
         appendExisting = findViewById(R.id.appendExisting);
-        if (excelName == null || fileList == null || emptyList == null || percentView == null
+        if (excelName == null || fileList == null || emptyList == null
                 || progressBar == null || statusView == null || etaView == null || formError == null
                 || workbookMode == null || startButton == null || downloadButton == null
                 || appendExisting == null || findViewById(R.id.pickPdfs) == null
@@ -525,7 +523,6 @@ public class MainActivity extends Activity {
         extraction.cancel();
         done = false;
         downloadButton.setEnabled(false);
-        percentView.setText(R.string.percent_zero);
         progressBar.setProgress(0);
         statusView.setText(R.string.status_idle);
         etaView.setText(R.string.eta_idle);
@@ -619,7 +616,6 @@ public class MainActivity extends Activity {
             int total = Math.max(1, state.fileCount);
             float overall = (state.fileIndex + state.fraction) / total;
             int percent = (int) Math.max(0, Math.min(99, overall * 100f));
-            percentView.setText(percent + " %");
             progressBar.setProgress(percent);
             statusView.setText("Läser fil " + (state.fileIndex + 1) + " av " + Math.max(state.fileCount, 1));
             long elapsed = Math.max(1, SystemClock.elapsedRealtime() - state.startedAt);
@@ -630,7 +626,6 @@ public class MainActivity extends Activity {
         }
         if (state.done && state.xlsx != null) {
             done = true;
-            percentView.setText("100 %");
             progressBar.setProgress(100);
             boolean problem = false;
             if (state.notes != null) {
@@ -748,7 +743,6 @@ public class MainActivity extends Activity {
     }
 
     private void showProgress(ProgressSnapshot snapshot) {
-        percentView.setText(snapshot.percent + " %");
         progressBar.setProgress(snapshot.percent);
         statusView.setText(snapshot.statusText());
         etaView.setText(snapshot.remainingLabel());

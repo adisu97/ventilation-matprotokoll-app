@@ -42,7 +42,6 @@
     <string name="show_ocr">Visa avläst text</string>
     <string name="ocr_empty">Ingen avläsning ännu. Tryck på Starta först.</string>
     <string name="ocr_saved">Texten sparades i Nedladdningar som ventapp-ocr.txt.</string>
-    <string name="percent_zero">0 %</string>
     <string name="status_idle">Inte startad</string>
     <string name="eta_idle">Beräknad tid kvar: –</string>
     <string name="name_required">Fyll i namnet på Excel-filen.</string>
