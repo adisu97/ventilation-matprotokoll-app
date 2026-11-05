@@ -3,9 +3,9 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="@dimen/gap"
-    android:background="@color/row_bg"
+    android:background="@drawable/bg_row"
     android:gravity="center_vertical"
-    android:minHeight="64dp"
+    android:minHeight="72dp"
     android:orientation="horizontal"
     android:padding="12dp">
 
@@ -16,17 +16,31 @@
         android:layout_weight="1"
         android:ellipsize="end"
         android:maxLines="2"
+        android:textColor="@color/text_primary"
         android:textSize="@dimen/body_text"
         android:textStyle="bold" />
+
+    <ImageButton
+        android:id="@+id/viewFile"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/bg_button_secondary"
+        android:contentDescription="@string/view_file"
+        android:padding="14dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/ic_eye" />
 
     <Button
         android:id="@+id/remove"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
-        android:minHeight="56dp"
+        android:background="@drawable/bg_button_secondary"
         android:minWidth="96dp"
+        android:minHeight="56dp"
         android:text="@string/remove"
+        android:textColor="@color/secondary_button_text"
         android:textSize="16sp" />
 
 </LinearLayout>
