@@ -13,6 +13,7 @@ import java.util.List;
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtSession;
+import fi.nyja.ventapp.engine.LatinScript;
 import fi.nyja.ventapp.engine.OcrToken;
 
 /** PP-OCRv4 det + rec. Models are the Apache-2.0 PaddleOCR weights shipped in assets. */
@@ -21,6 +22,10 @@ public final class PpOcr implements AutoCloseable {
     private final OrtSession det;
     private final OrtSession rec;
     private final List<String> keys;
+    /** Detection boxes, raw recognition strings, and strings kept after the Latin filter. */
+    public int boxes;
+    public int recognized;
+    public int kept;
 
     public PpOcr(byte[] detModel, byte[] recModel, InputStream charset) throws Exception {
         env = OrtEnvironment.getEnvironment();
@@ -39,16 +44,28 @@ public final class PpOcr implements AutoCloseable {
         reader.close();
     }
 
+    public void resetCounts() {
+        boxes = 0;
+        recognized = 0;
+        kept = 0;
+    }
+
     public List<OcrToken> read(Bitmap bitmap, float originX, float originY, float pixelsPerPoint) throws Exception {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
         int[] px = new int[width * height];
         bitmap.getPixels(px, 0, width, 0, 0, width, height);
+        return readPixels(px, width, height, originX, originY, pixelsPerPoint);
+    }
+
+    /** Same pipeline as {@link #read}, so a JVM test can pass pixels without an Android bitmap. */
+    public List<OcrToken> readPixels(int[] px, int width, int height, float originX, float originY,
+            float pixelsPerPoint) throws Exception {
         contrast(px);
         int rw = width;
         int rh = height;
         float scale = 1f;
-        int maxSide = 640;
+        int maxSide = 960;
         if (Math.max(width, height) > maxSide) {
             scale = maxSide / (float) Math.max(width, height);
             rw = Math.max(32, Math.round(width * scale / 32f) * 32);
@@ -63,24 +80,30 @@ public final class PpOcr implements AutoCloseable {
              OrtSession.Result result = det.run(java.util.Collections.singletonMap("x", tensor))) {
             map = flatten((OnnxTensor) result.get(0));
         }
-        List<int[]> boxes = components(map, rw, rh);
+        List<int[]> found = components(map, rw, rh);
+        boxes += found.size();
         List<OcrToken> tokens = new ArrayList<OcrToken>();
         float backX = width / (float) rw;
         float backY = height / (float) rh;
-        int limit = Math.min(boxes.size(), 48);
+        int limit = Math.min(found.size(), 240);
         for (int i = 0; i < limit; i++) {
-            int[] box = boxes.get(i);
+            int[] box = found.get(i);
             int x0 = clamp((int) (box[0] * backX) - 2, 0, width - 1);
             int y0 = clamp((int) (box[1] * backY) - 2, 0, height - 1);
             int x1 = clamp((int) (box[2] * backX) + 2, x0 + 1, width);
             int y1 = clamp((int) (box[3] * backY) + 2, y0 + 1, height);
-            String text = recognize(px, width, x0, y0, x1, y1);
+            String raw = recognize(px, width, x0, y0, x1, y1);
+            if (raw.length() > 0) {
+                recognized++;
+            }
+            String text = LatinScript.clean(raw);
             if (text.length() < 2) {
                 continue;
             }
+            kept++;
             double cx = (originX + (x0 + x1) / 2f) / pixelsPerPoint;
             double cy = (originY + (y0 + y1) / 2f) / pixelsPerPoint;
-            tokens.add(new OcrToken(text, cx, cy, 0.75));
+            tokens.add(new OcrToken(text, cx, cy, 0.75, (x1 - x0) / pixelsPerPoint, (y1 - y0) / pixelsPerPoint));
         }
         return tokens;
     }
@@ -128,17 +151,34 @@ public final class PpOcr implements AutoCloseable {
         double score = 0;
         int count = 0;
         for (int t = 0; t < steps; t++) {
+            int offset = t * classes;
             int best = 0;
             float bestV = -1e9f;
-            int offset = t * classes;
+            int latin = 0;
+            float latinV = -1e9f;
             for (int c = 0; c < classes; c++) {
                 float v = logits[offset + c];
                 if (v > bestV) {
                     bestV = v;
                     best = c;
                 }
+                if (c == 0 || (c - 1 < keys.size() && LatinScript.allowedKey(keys.get(c - 1)))) {
+                    if (v > latinV) {
+                        latinV = v;
+                        latin = c;
+                    }
+                }
             }
-            if (best != 0 && best != prev && best - 1 < keys.size()) {
+            if (best != 0 && best - 1 < keys.size() && !LatinScript.allowedKey(keys.get(best - 1))) {
+                float margin = Math.max(1.5f, Math.abs(bestV) * 0.25f);
+                boolean probability = bestV >= 0f && bestV <= 1.5f;
+                if (probability) {
+                    best = latin > 0 && latinV >= 0.2f && latinV + margin >= bestV ? latin : 0;
+                } else {
+                    best = latinV + margin >= bestV ? latin : 0;
+                }
+            }
+            if (best != 0 && best != prev && best - 1 < keys.size() && LatinScript.allowedKey(keys.get(best - 1))) {
                 text.append(keys.get(best - 1));
                 score += bestV;
                 count++;
@@ -155,8 +195,8 @@ public final class PpOcr implements AutoCloseable {
         boolean[] seen = new boolean[width * height];
         List<int[]> boxes = new ArrayList<int[]>();
         int[] stack = new int[width * height];
-        for (int i = 0; i < map.length; i += 2) {
-            if (seen[i] || map[i] < 0.3f) {
+        for (int i = 0; i < map.length; i++) {
+            if (seen[i] || map[i] < 0.2f) {
                 continue;
             }
             int sp = 0;
@@ -186,10 +226,19 @@ public final class PpOcr implements AutoCloseable {
                 sp = consider(stack, seen, map, width, height, sp, x, y + 1);
                 sp = consider(stack, seen, map, width, height, sp, x, y - 1);
             }
-            if (count > 12 && sum / count >= 0.5f && maxX - minX > 6 && maxY - minY > 4) {
-                boxes.add(new int[]{minX, minY, maxX + 1, maxY + 1});
+            int bw = maxX - minX + 1;
+            int bh = maxY - minY + 1;
+            if (count > 8 && sum / count >= 0.35f && bw > 8 && bh > 8) {
+                int padX = Math.max(2, bw / 8);
+                int padY = Math.max(2, bh / 5);
+                boxes.add(new int[]{
+                        Math.max(0, minX - padX),
+                        Math.max(0, minY - padY),
+                        Math.min(width, maxX + 1 + padX),
+                        Math.min(height, maxY + 1 + padY)
+                });
             }
-            if (boxes.size() >= 48) {
+            if (boxes.size() >= 200) {
                 break;
             }
         }
@@ -201,7 +250,7 @@ public final class PpOcr implements AutoCloseable {
             return sp;
         }
         int idx = y * width + x;
-        if (seen[idx] || map[idx] < 0.3f) {
+        if (seen[idx] || map[idx] < 0.2f) {
             return sp;
         }
         seen[idx] = true;
