@@ -330,7 +330,14 @@ public final class ProtocolBuilder {
             return null;
         }
         String raw = text.trim();
-        if (raw.isEmpty() || raw.length() > 40) {
+        if (raw.isEmpty() || raw.length() > 48) {
+            return null;
+        }
+        RoomText custom = RoomFormats.parse(raw);
+        if (custom != null) {
+            return custom;
+        }
+        if (raw.length() > 40) {
             return null;
         }
         java.util.regex.Matcher spaced = SPLIT_LETTER_SPACE.matcher(raw);

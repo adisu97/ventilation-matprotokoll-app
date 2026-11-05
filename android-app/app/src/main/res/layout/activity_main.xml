@@ -150,6 +150,12 @@
                     android:layout_marginTop="@dimen/gap"
                     android:text="@string/vent_names" />
 
+                <Button
+                    android:id="@+id/roomFormats"
+                    style="@style/SecondaryButton"
+                    android:layout_marginTop="@dimen/gap"
+                    android:text="@string/room_formats" />
+
                 <LinearLayout
                     android:id="@+id/appendRow"
                     android:layout_width="match_parent"

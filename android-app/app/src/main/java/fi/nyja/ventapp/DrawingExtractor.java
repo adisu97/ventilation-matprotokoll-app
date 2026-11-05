@@ -48,6 +48,7 @@ public final class DrawingExtractor {
     public static Outcome extract(Context context, List<DrawingEntry> drawings, String existingUri, Progress progress)
             throws Exception {
         VentNameStore.load(context);
+        RoomFormatStore.load(context);
         byte[] base = existingUri == null ? readAsset(context, "matprotokoll_grund.xlsx") : readUri(context, Uri.parse(existingUri));
         boolean fromTemplate = existingUri == null;
         PpOcr ocr = openOcr(context);
@@ -61,6 +62,8 @@ public final class DrawingExtractor {
                 DrawingEntry entry = drawings.get(i);
                 final int index = i;
                 try {
+                    int mark = debug.length();
+                    ocr.resetCounts();
                     List<OcrToken> tokens = readDrawing(context, ocr, entry, new TileProgress() {
                         @Override
                         public void onTile(float fraction) {
@@ -78,9 +81,25 @@ public final class DrawingExtractor {
                             unsure++;
                         }
                     }
+                    String summary = "Sammanfattning " + (entry.name == null ? "" : entry.name) + "\n"
+                            + "OCR-rutor: " + ocr.boxes + "\n"
+                            + "OCR-texter: " + ocr.recognized + "\n"
+                            + "OCR-kvar: " + ocr.kept + "\n"
+                            + "rum: " + rooms.size() + "\n"
+                            + "don: " + vents.size() + "\n"
+                            + "osäkra: " + unsure + "\n\n";
+                    debug.insert(mark, summary);
                     debug.append("rum: ").append(rooms.size()).append("\n");
                     debug.append("don: ").append(vents.size()).append("\n");
                     debug.append("osäkra: ").append(unsure).append("\n\n");
+                    if (rooms.isEmpty() && vents.isEmpty()) {
+                        if (ocr.boxes == 0) {
+                            notes.add(entry.name + ": OCR hittade 0 rutor. Ingen text att tolka.");
+                        } else {
+                            notes.add(entry.name + ": OCR " + ocr.boxes + " rutor, " + ocr.recognized
+                                    + " texter, " + ocr.kept + " kvar efter filter. Inget rum eller don tolkades.");
+                        }
+                    }
                     String sheet = SheetNames.fromFileName(entry.name, usedNames);
                     usedNames.add(sheet);
                     sheets.add(new ProtocolXlsx.DrawingSheet(sheet, rows));
@@ -213,7 +232,7 @@ public final class DrawingExtractor {
                 tokens.addAll(text.tokens);
                 debug.append("textlager: ").append(text.tokens.size()).append(" ord\n");
                 if (text.tokens.isEmpty()) {
-                    notes.add(label + ": PDF:en har inget textlager. Rum och don söks med OCR.");
+                    debug.append("textlager tomt, OCR används\n");
                 }
             }
         } catch (Exception ex) {
@@ -230,14 +249,15 @@ public final class DrawingExtractor {
             for (int p = 0; p < pages; p++) {
                 PdfRenderer.Page page = renderer.openPage(p);
                 try {
-                    float longestPt = Math.max(page.getWidth(), page.getHeight());
-                    float scale = longestPt > 2800f ? 3.2f : 4f;
+                    // 300 dpi: an 8 pt label is about 33 px tall, inside the 20–40 px band.
+                    float scale = 300f / 72f;
                     int fullW = Math.max(1, Math.round(page.getWidth() * scale));
                     int fullH = Math.max(1, Math.round(page.getHeight() * scale));
                     debug.append("pdf sida ").append(p + 1).append(" skala=").append(scale)
-                            .append(" px=").append(fullW).append("x").append(fullH).append("\n");
+                            .append(" px=").append(fullW).append("x").append(fullH)
+                            .append(" text8pt=").append(Math.round(8f * scale)).append("px\n");
                     int tile = 960;
-                    int overlap = 240;
+                    int overlap = 280;
                     int step = Math.max(1, tile - overlap);
                     int tilesX = Math.max(1, (fullW + step - 1) / step);
                     int tilesY = Math.max(1, (fullH + step - 1) / step);
@@ -361,25 +381,25 @@ public final class DrawingExtractor {
     private static boolean mostlyBlank(Bitmap bitmap) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
-        int step = Math.max(1, Math.min(width, height) / 40);
-        long sum = 0;
-        long sumSq = 0;
+        int step = Math.max(2, Math.min(width, height) / 120);
+        int dark = 0;
         int count = 0;
+        long sum = 0;
         for (int y = 0; y < height; y += step) {
             for (int x = 0; x < width; x += step) {
                 int color = bitmap.getPixel(x, y);
-                int gray = (color >> 16) & 255;
+                int gray = ((color >> 16) & 255);
                 sum += gray;
-                sumSq += (long) gray * gray;
                 count++;
+                if (gray < 210) {
+                    dark++;
+                }
             }
         }
         if (count == 0) {
             return true;
         }
-        double mean = sum / (double) count;
-        double variance = sumSq / (double) count - mean * mean;
-        return mean > 248 && variance < 36;
+        return dark < 2 && sum / (double) count > 248;
     }
 
     private static byte[] readAsset(Context context, String name) throws Exception {

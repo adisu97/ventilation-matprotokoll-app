@@ -3,6 +3,7 @@ package fi.nyja.ventapp.engine;
 import org.junit.Test;
 
 import fi.nyja.ventapp.PdfTextLayer;
+import fi.nyja.ventapp.engine.RoomFormats;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -331,6 +332,35 @@ public class ProtocolLogicTest {
     }
 
     @Test
+    public void roomExamplesAddPatternsBesideTheDefaults() {
+        java.util.List<RoomFormats.Derived> formats = new java.util.ArrayList<RoomFormats.Derived>();
+        RoomFormats.Derived letter = RoomFormats.derive("E125 WC");
+        assertEquals("bokstav + 3 siffror + namn", letter.summary);
+        formats.add(letter);
+        formats.add(RoomFormats.derive("101"));
+        RoomFormats.Derived dotted = RoomFormats.derive("A.102 Kontor");
+        assertTrue(dotted.summary.contains("\".\""));
+        formats.add(dotted);
+        RoomFormats.Derived hyphen = RoomFormats.derive("1-203 Ruokailu");
+        assertTrue(hyphen.summary.contains("\"-\""));
+        formats.add(hyphen);
+        RoomFormats.use(formats);
+        try {
+            assertEquals("E125", RoomFormats.parse("E125 WC").number);
+            assertEquals("WC", RoomFormats.parse("E125 WC").name);
+            assertEquals("101", RoomFormats.parse("101").number);
+            assertEquals("A.102", RoomFormats.parse("A.102 Kontor").number);
+            assertEquals("kontor", RoomFormats.parse("a.102 kontor").name);
+            assertEquals("1-203", ProtocolBuilder.splitRoom("1-203 Ruokailu").number);
+            assertEquals("Ruokailu", ProtocolBuilder.splitRoom("1-203 Ruokailu").name);
+            assertNull(RoomFormats.parse("KSO-125"));
+            assertEquals("Nummer: 1-203  Namn: Ruokailu", RoomFormats.trial("1-203 Ruokailu"));
+        } finally {
+            RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
+        }
+    }
+
+    @Test
     public void parsesExhaustAndSupplyLabels() {
         Vent exhaust = LabelParser.parse("KSO-125 -20", 10, 20, 0.9);
         assertNotNull(exhaust);
@@ -501,8 +531,51 @@ public class ProtocolLogicTest {
         assertTrue(cover.contains("<v>0</v>"));
         assertFalse(cover.contains("<v />"));
         assertFalse(cover.contains("<v/>"));
+        assertFalse(cover.contains("SUM(C26:C29)"));
+        assertFalse(cover.contains("r=\"C30\""));
+        assertTrue(cover.contains("SUM(C9:C13)"));
+        assertTrue(fullThinBorder(styles, styleOf(plan, "C2")));
+        assertTrue(fullThinBorder(styles, styleOf(plan, "I2")));
         String unsureSheet = zipEntryContaining(xlsx, "xl/worksheets/sheet", "storlek saknas");
         assertTrue(unsureSheet.contains("E102 AULA"));
+    }
+
+    private static boolean fullThinBorder(String styles, String styleIndex) {
+        java.util.regex.Matcher xfs = java.util.regex.Pattern.compile("(?s)<cellXfs[^>]*>(.*)</cellXfs>").matcher(styles);
+        assertTrue(xfs.find());
+        java.util.regex.Matcher xf = java.util.regex.Pattern.compile("(?s)<xf\\b[^>]*/>|<xf\\b[^>]*>.*?</xf>").matcher(xfs.group(1));
+        int index = Integer.parseInt(styleIndex);
+        int at = 0;
+        String tag = null;
+        while (xf.find()) {
+            if (at == index) {
+                tag = xf.group();
+                break;
+            }
+            at++;
+        }
+        assertNotNull(tag);
+        java.util.regex.Matcher borderId = java.util.regex.Pattern.compile("borderId=\"(\\d+)\"").matcher(tag);
+        assertTrue(borderId.find());
+        java.util.regex.Matcher borders = java.util.regex.Pattern.compile("(?s)<borders[^>]*>(.*)</borders>").matcher(styles);
+        assertTrue(borders.find());
+        java.util.regex.Matcher border = java.util.regex.Pattern.compile("(?s)<border\\b.*?</border>|<border[^>]*/>").matcher(borders.group(1));
+        at = 0;
+        String body = null;
+        while (border.find()) {
+            if (at == Integer.parseInt(borderId.group(1))) {
+                body = border.group();
+                break;
+            }
+            at++;
+        }
+        assertNotNull(body);
+        for (String side : new String[] {"left", "right", "top", "bottom"}) {
+            if (!java.util.regex.Pattern.compile("<" + side + "\\b[^>]*style=\"thin\"").matcher(body).find()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String styleOf(String sheet, String ref) {

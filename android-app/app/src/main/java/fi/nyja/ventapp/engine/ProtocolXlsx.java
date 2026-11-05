@@ -33,6 +33,10 @@ public final class ProtocolXlsx {
     public static byte[] build(byte[] templateOrExisting, List<DrawingSheet> drawings, boolean fromTemplate)
             throws IOException {
         Map<String, byte[]> zip = readZip(templateOrExisting);
+        stripStrayC30(zip);
+        if (zip.containsKey("xl/styles.xml")) {
+            zip.put("xl/styles.xml", gridBorders(zip.get("xl/styles.xml")));
+        }
         String workbook = text(zip, "xl/workbook.xml");
         String rels = text(zip, "xl/_rels/workbook.xml.rels");
         String contentTypes = text(zip, "[Content_Types].xml");
@@ -374,6 +378,49 @@ public final class ProtocolXlsx {
             return workbook.replace("<calcPr", "<calcPr fullCalcOnLoad=\"1\" ");
         }
         return workbook.replace("</workbook>", "<calcPr fullCalcOnLoad=\"1\"/></workbook>");
+    }
+
+    /** The cover sheet has a lone SUM in C30, outside the real total row. */
+    private static void stripStrayC30(Map<String, byte[]> zip) {
+        for (Map.Entry<String, byte[]> entry : new ArrayList<Map.Entry<String, byte[]>>(zip.entrySet())) {
+            if (!entry.getKey().startsWith("xl/worksheets/") || !entry.getKey().endsWith(".xml")) {
+                continue;
+            }
+            String xml = new String(entry.getValue(), StandardCharsets.UTF_8);
+            if (!xml.contains("SUM(C26:C29)")) {
+                continue;
+            }
+            String next = xml.replaceAll(
+                    "<c r=\"C30\"[^>]*>\\s*<f>SUM\\(C26:C29\\)</f>\\s*(?:<v[^>]*>.*?</v>|<v\\s*/>)?\\s*</c>",
+                    "");
+            next = next.replaceAll("<row r=\"30\"[^>]*>\\s*</row>", "");
+            zip.put(entry.getKey(), next.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    /** Data styles 25–31 used a border with no top edge. Give them a full thin box. */
+    private static byte[] gridBorders(byte[] styles) {
+        String xml = new String(styles, StandardCharsets.UTF_8);
+        int start = xml.indexOf("<cellXfs");
+        int open = start < 0 ? -1 : xml.indexOf('>', start);
+        int end = xml.indexOf("</cellXfs>");
+        if (open < 0 || end < open) {
+            return styles;
+        }
+        Matcher xfs = Pattern.compile("(?s)<xf\\b[^>]*/>|<xf\\b[^>]*>.*?</xf>").matcher(xml.substring(open + 1, end));
+        StringBuffer body = new StringBuffer();
+        int index = 0;
+        while (xfs.find()) {
+            String tag = xfs.group();
+            if (index >= 25 && index <= 31) {
+                tag = tag.replaceFirst("borderId=\"\\d+\"", "borderId=\"1\"");
+            }
+            xfs.appendReplacement(body, Matcher.quoteReplacement(tag));
+            index++;
+        }
+        xfs.appendTail(body);
+        String next = xml.substring(0, open + 1) + body + xml.substring(end);
+        return next.getBytes(StandardCharsets.UTF_8);
     }
 
     /** Viewers that skip calculation still show the cached number in <v>. */

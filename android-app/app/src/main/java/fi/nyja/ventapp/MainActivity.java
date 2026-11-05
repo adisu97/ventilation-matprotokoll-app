@@ -168,6 +168,12 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(MainActivity.this, VentNamesActivity.class));
             }
         });
+        findViewById(R.id.roomFormats).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, RoomFormatsActivity.class));
+            }
+        });
         findViewById(R.id.appendLabel).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

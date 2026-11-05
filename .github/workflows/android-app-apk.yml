@@ -2,7 +2,7 @@ name: Android app-APK
 
 on:
   push:
-    branches: [main, cursor/lockzone-exca-apk12-82ba]
+    branches: [main, cursor/ocr-rooms-apk13-82ba]
     paths:
       - "android-app/**"
       - ".github/workflows/android-app-apk.yml"
@@ -49,7 +49,7 @@ jobs:
         working-directory: android-app
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Kontrollera Starta överst och versionCode 15
+      - name: Kontrollera Starta överst och versionCode 16
         run: |
           set -euo pipefail
           APK="android-app/app/build/outputs/apk/universal/release/app-universal-release.apk"
@@ -57,7 +57,7 @@ jobs:
           badging="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"
           code="$(printf '%s\n' "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
           echo "versionCode=$code"
-          test "$code" = "15"
+          test "$code" = "16"
           printf '%s\n' "$badging" | grep -F "fi.nyja.ventapp.MainActivity" >/dev/null
           found=0
           while IFS= read -r layout; do
@@ -106,7 +106,7 @@ jobs:
             badging="$("$AAPT" dump badging "$out" 2>/dev/null || true)"
             printf '%s\n' "$badging" | grep -q "sdkVersion:'21'"
             printf '%s\n' "$badging" | grep -q "targetSdkVersion:'35'"
-            printf '%s\n' "$badging" | grep -q "versionCode='15'"
+            printf '%s\n' "$badging" | grep -q "versionCode='16'"
             printf '%s\n' "$badging" | grep -q "name='fi.nyja.ventapp'"
             if printf '%s\n' "$badging" | grep -q "application-debuggable"; then
               echo "debuggable APK: $out" >&2
@@ -145,15 +145,15 @@ jobs:
           ls -l ventapp.apk ventapp-arm64.apk
           sha256sum ventapp.apk ventapp-arm64.apk | tee SHA256SUMS
           cat > release-body.md << EOF
-          Mätprotokoll för Android, version 1.15 (versionCode 15), targetSdk 35. Signerad med v1+v2+v3 och samma sideload-nyckel som version 5.
+          Mätprotokoll för Android, version 1.16 (versionCode 16), targetSdk 35. Signerad med v1+v2+v3 och samma sideload-nyckel som version 5.
 
           ventapp-arm64.apk ($(stat -c%s ventapp-arm64.apk) byte) är den mindre filen, bara arm64-v8a, för telefoner som Galaxy A52.
           ventapp.apk ($(stat -c%s ventapp.apk) byte) innehåller arm64-v8a och armeabi-v7a.
 
-          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-12/ventapp-arm64.apk
-          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-12/ventapp.apk
+          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-13/ventapp-arm64.apk
+          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-13/ventapp.apk
 
-          LOCKZONE är tilluft och EXCA är frånluft, även som 2xLOCKZONE och LOCKZONE-125-C.
+          Ritningar utan textlager OCR-läses i 300 dpi. Om inget hittas står det om OCR fick 0 rutor eller text som inte tolkades. Rumsformat finns som egen skärm.
 
           Avläsningen ritar tätare och skarpare, läser även text på högkant, och Visa avläst text sparar ventapp-ocr.txt.
 
@@ -161,10 +161,10 @@ jobs:
           EOF
           sed -i 's/^          //' release-body.md
 
-      - name: Publicera förhandsrelease app-apk-12
+      - name: Publicera förhandsrelease app-apk-13
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-apk-12
+          tag_name: app-apk-13
           target_commitish: ${{ github.sha }}
           name: Mätprotokoll Android
           draft: false
