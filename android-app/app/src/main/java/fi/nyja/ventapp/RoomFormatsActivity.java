@@ -90,6 +90,7 @@ public class RoomFormatsActivity extends Activity {
             row.setPadding(0, 16, 0, 8);
             TextView title = new TextView(this);
             title.setText(examples.get(i));
+            title.setSingleLine(false);
             title.setTextColor(getResources().getColor(R.color.text_primary));
             title.setTextSize(18);
             TextView summary = new TextView(this);

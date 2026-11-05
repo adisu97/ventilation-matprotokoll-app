@@ -8,12 +8,12 @@
     <string name="vent_names">Ventilnamn</string>
     <string name="room_formats">Rumsformat</string>
     <string name="room_formats_title">Rumsformat</string>
-    <string name="room_formats_help">Skriv exempel på hur rumsnummer och namn ser ut på ritningen. Appen läser av samma form, utöver standarden.</string>
-    <string name="room_example_hint">t.ex. E125 WC, 101, A.102 Kontor</string>
-    <string name="room_example_invalid">Skriv ett exempel som innehåller siffror.</string>
+    <string name="room_formats_help">Skriv exempel på hur rumsnummer och namn ser ut på ritningen. En rad är nummer och namn efter varandra. Två rader betyder att numret står på en rad och namnet direkt under, som på ritningen. Appen läser av samma form, utöver standarden.</string>
+    <string name="room_example_hint">E125 WC, eller två rader:\nE111\nVINDFÅNG</string>
+    <string name="room_example_invalid">Skriv ett exempel med siffror. Två rader: numret först, namnet under (bokstäver, åäö, mellanslag eller bindestreck).</string>
     <string name="room_example_exists">Exemplet finns redan.</string>
     <string name="room_format_test">Test</string>
-    <string name="room_trial_hint">Skriv text och se om den matchas</string>
+    <string name="room_trial_hint">Skriv en eller två rader och se om de matchas</string>
     <string name="vent_names_title">Ventilnamn</string>
     <string name="vent_count">Aktiva namn: %1$d</string>
     <string name="tilluft">Tilluft</string>

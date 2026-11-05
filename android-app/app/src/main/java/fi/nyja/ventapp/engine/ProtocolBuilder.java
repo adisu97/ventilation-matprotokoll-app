@@ -1,10 +1,13 @@
 package fi.nyja.ventapp.engine;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Pair vents into protocol rows and collect uncertain rows. */
@@ -26,9 +29,14 @@ public final class ProtocolBuilder {
     }
 
     public static List<Room> roomsFromTokens(List<OcrToken> tokens) {
+        Set<OcrToken> stackedNameTokens = Collections.newSetFromMap(new IdentityHashMap<OcrToken, Boolean>());
+        Map<OcrToken, String> stacked = RoomFormats.stackedNames(tokens, stackedNameTokens);
         List<Room> rooms = new ArrayList<Room>();
         for (int i = 0; i < tokens.size(); i++) {
             OcrToken token = tokens.get(i);
+            if (stackedNameTokens.contains(token)) {
+                continue;
+            }
             String text = LatinScript.clean(token.text.trim());
             RoomText parts = splitRoom(text);
             if (parts == null) {
@@ -38,11 +46,14 @@ public final class ProtocolBuilder {
                     && LabelParser.parse(text, token.x, token.y, token.confidence) != null) {
                 continue;
             }
-            if (LabelParser.looksLikeDuctSize(parts.number) && !LatinScript.isKnownRoomName(parts.name)
-                    && !hasRoomNameNearby(tokens, token)) {
+            String stackedName = stacked.containsKey(token) ? stacked.get(token) : "";
+            boolean fromStack = parts.name.isEmpty() && stackedName != null && !stackedName.isEmpty();
+            String named = parts.name.isEmpty() ? stackedName : parts.name;
+            if (LabelParser.looksLikeDuctSize(parts.number) && !LatinScript.isKnownRoomName(named)
+                    && !fromStack && !hasRoomNameNearby(tokens, token)) {
                 continue;
             }
-            String name = parts.name.isEmpty() ? nearbyName(tokens, token) : parts.name;
+            String name = named == null || named.isEmpty() ? nearbyName(tokens, token, stackedNameTokens) : named;
             name = LatinScript.correctRoomName(name);
             rooms.add(new Room(parts.number, name, token.x, token.y, token.confidence));
         }
@@ -419,11 +430,11 @@ public final class ProtocolBuilder {
         return kept;
     }
 
-    private static String nearbyName(List<OcrToken> tokens, OcrToken room) {
+    private static String nearbyName(List<OcrToken> tokens, OcrToken room, Set<OcrToken> skip) {
         String best = "";
         double bestD = 42;
         for (OcrToken token : tokens) {
-            if (token == room) {
+            if (token == room || (skip != null && skip.contains(token))) {
                 continue;
             }
             String text = token.text.trim();

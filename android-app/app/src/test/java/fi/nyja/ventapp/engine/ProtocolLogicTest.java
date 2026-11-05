@@ -361,6 +361,100 @@ public class ProtocolLogicTest {
     }
 
     @Test
+    public void stackedRoomExamplePairsTheNameUnderTheNumber() throws Exception {
+        RoomFormats.Derived wind = RoomFormats.derive("E111\nVINDFÅNG");
+        assertEquals("bokstav + 3 siffror, nummer på en rad + namn under", wind.summary);
+        assertTrue(wind.stacked);
+        assertEquals("E111\nVINDFÅNG", wind.example);
+        assertEquals("3 siffror, nummer på en rad + namn under", RoomFormats.derive("101\nKÖK").summary);
+        RoomFormats.Derived dotted = RoomFormats.derive("A.102\nKontor");
+        assertTrue(dotted.summary.contains("\".\""));
+        assertTrue(dotted.summary.contains("nummer på en rad + namn under"));
+        assertNotNull(RoomFormats.derive("E111\nVIND-FÅNG"));
+        assertNotNull(RoomFormats.derive("E111\nSTOR HALL"));
+        assertNull(RoomFormats.derive("E111\nKSO"));
+        assertNull(RoomFormats.derive("VINDFÅNG\nE111"));
+        assertEquals("bokstav + 3 siffror + namn", RoomFormats.derive("E125 WC").summary);
+
+        String stored = RoomFormats.encodeExamples(java.util.Arrays.asList("E111\nVINDFÅNG", "E125 WC"));
+        java.util.List<String> back = RoomFormats.decodeExamples(stored);
+        assertEquals("E111\nVINDFÅNG", back.get(0));
+        assertEquals("E125 WC", back.get(1));
+        assertEquals("E125 WC", RoomFormats.decodeExamples("E125 WC\n101").get(0));
+        assertEquals("101", RoomFormats.decodeExamples("E125 WC\n101").get(1));
+
+        java.util.List<RoomFormats.Derived> formats = new java.util.ArrayList<RoomFormats.Derived>();
+        formats.add(wind);
+        formats.add(RoomFormats.derive("101\nKÖK"));
+        formats.add(dotted);
+        formats.add(RoomFormats.derive("E125 WC"));
+        RoomFormats.use(formats);
+        try {
+            assertEquals("E111", RoomFormats.parse("E111\nVINDFÅNG").number);
+            assertEquals("VINDFÅNG", RoomFormats.parse("E111\nVINDFÅNG").name);
+            assertEquals("101", RoomFormats.parse("101\nKÖK").number);
+            assertEquals("KÖK", RoomFormats.parse("101\nKÖK").name);
+            assertEquals("A.102", RoomFormats.parse("A.102\nKontor").number);
+            assertEquals("Kontor", RoomFormats.parse("A.102\nKontor").name);
+            assertEquals("Nummer: E111  Namn: VINDFÅNG", RoomFormats.trial("E111\nVINDFÅNG"));
+            assertEquals("Nummer: 101  Namn: KÖK", RoomFormats.trial("101\nKÖK"));
+            assertEquals("A.102", RoomFormats.parse("A.102 Kontor").number);
+            assertEquals("Kontor", ProtocolBuilder.splitRoom("A.102 Kontor").name);
+            assertEquals("E125", ProtocolBuilder.splitRoom("E125 WC").number);
+            assertEquals("WC", ProtocolBuilder.splitRoom("E125 WC").name);
+
+            // Centres and box sizes, the same geometry PDF words and OCR boxes use.
+            // 30 pt text: the name 48 pt below is outside the old 42 pt nearest-word search.
+            java.util.List<OcrToken> tokens = new java.util.ArrayList<OcrToken>();
+            tokens.add(new OcrToken("E111", 100, 100, 0.95, 40, 30));
+            tokens.add(new OcrToken("HALL", 130, 100, 0.95, 36, 30));
+            tokens.add(new OcrToken("FÖRRÅD", 102, 52, 0.95, 60, 30));
+            tokens.add(new OcrToken("VINDFÅNG", 108, 148, 0.95, 80, 30));
+            tokens.add(new OcrToken("101", 400, 200, 0.95, 28, 30));
+            tokens.add(new OcrToken("KÖK", 400, 152, 0.95, 36, 30));
+            tokens.add(new OcrToken("A.102", 700, 300, 0.95, 36, 12));
+            tokens.add(new OcrToken("Kontor", 718, 318, 0.95, 70, 12));
+            tokens.add(new OcrToken("E125 WC", 20, 20, 0.98, 50, 10));
+            tokens.add(new OcrToken("B110", 50, 500, 0.9, 0, 0));
+            tokens.add(new OcrToken("HALL", 50, 514, 0.9, 0, 0));
+            tokens.add(new OcrToken("E222", 900, 100, 0.9, 30, 10));
+            tokens.add(new OcrToken("NAMN", 900, 180, 0.9, 40, 10));
+            tokens.add(new OcrToken("F300", 50, 700, 0.9, 30, 12));
+            tokens.add(new OcrToken("RUMMET", 140, 700, 0.9, 50, 12));
+
+            java.util.List<Room> rooms = ProtocolBuilder.roomsFromTokens(tokens);
+            assertEquals("VINDFÅNG", roomNamed(rooms, "E111").name);
+            assertEquals("KÖK", roomNamed(rooms, "101").name);
+            assertEquals("Kontor", roomNamed(rooms, "A.102").name);
+            assertEquals("WC", roomNamed(rooms, "E125").name);
+            assertEquals("HALL", roomNamed(rooms, "B110").name);
+            assertEquals("", roomNamed(rooms, "E222").name);
+            assertEquals("", roomNamed(rooms, "F300").name);
+
+            java.util.List<ProtocolRow> rows = ProtocolBuilder.pair(rooms, java.util.Collections.<Vent>emptyList());
+            File template = new File("../../templates/matprotokoll_grund.xlsx");
+            if (!template.isFile()) {
+                template = new File("../templates/matprotokoll_grund.xlsx");
+            }
+            byte[] xlsx = ProtocolXlsx.build(
+                    java.nio.file.Files.readAllBytes(template.toPath()),
+                    java.util.Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", rows)),
+                    true);
+            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
+            assertTrue(cellWindow(plan, "A2").contains(">E111</t>"));
+            assertTrue(cellWindow(plan, "B2").contains(">VINDFÅNG</t>"));
+            assertTrue(cellWindow(plan, "A3").contains(">101</t>"));
+            assertTrue(cellWindow(plan, "B3").contains(">KÖK</t>"));
+            assertTrue(cellWindow(plan, "A4").contains(">A.102</t>"));
+            assertTrue(cellWindow(plan, "B4").contains(">Kontor</t>"));
+            assertTrue(cellWindow(plan, "A5").contains(">E125</t>"));
+            assertTrue(cellWindow(plan, "B5").contains(">WC</t>"));
+        } finally {
+            RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
+        }
+    }
+
+    @Test
     public void parsesExhaustAndSupplyLabels() {
         Vent exhaust = LabelParser.parse("KSO-125 -20", 10, 20, 0.9);
         assertNotNull(exhaust);
