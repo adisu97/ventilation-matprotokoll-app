@@ -47,7 +47,7 @@ jobs:
           badging="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"
           code="$(printf '%s\n' "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
           echo "versionCode=$code"
-          test "$code" = "19"
+          test "$code" = "20"
           found=0
           while IFS= read -r layout; do
             tree="$("$AAPT" dump xmltree "$APK" "$layout" 2>/dev/null || true)"

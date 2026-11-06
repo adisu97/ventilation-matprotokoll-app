@@ -73,6 +73,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".SizeReviewActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".OcrLogActivity"
             android:exported="false" />
 

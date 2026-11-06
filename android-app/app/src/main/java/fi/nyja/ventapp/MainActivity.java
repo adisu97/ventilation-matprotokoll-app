@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
     private static final int REQ_CAMERA_PERMISSION = 3;
     private static final int REQ_WORKBOOK = 4;
     private static final int REQ_NOTIFICATIONS = 8;
+    private static final int REQ_SIZES = 9;
     private static final long PER_FILE_MS = 1000L;
     private static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -64,6 +65,7 @@ public class MainActivity extends Activity {
 
     private int nextPhoto = 1;
     private boolean done;
+    private boolean sizeReviewShown;
     private int runTotal;
     private boolean ignoreSwitch;
     private String existingWorkbookUri;
@@ -375,6 +377,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_SIZES) {
+            sizeReviewShown = false;
+            applyJob();
+            return;
+        }
         if (requestCode == REQ_DRAWINGS && resultCode == RESULT_OK && data != null) {
             addPickedDrawings(data);
         } else if (requestCode == REQ_WORKBOOK) {
@@ -587,6 +594,7 @@ public class MainActivity extends Activity {
     }
 
     private void beginExtraction() {
+        sizeReviewShown = false;
         excelName.setError(null);
         formError.setText("");
         done = false;
@@ -622,6 +630,18 @@ public class MainActivity extends Activity {
             long remaining = overall < 0.02f ? 0 : (long) (elapsed * (1f - overall) / overall);
             long seconds = (remaining + 999) / 1000;
             etaView.setText("Beräknad tid kvar: " + (seconds / 60) + ":" + (seconds % 60 < 10 ? "0" : "") + (seconds % 60));
+            return;
+        }
+        if (state.done && state.needsSize && state.xlsx == null) {
+            progressBar.setProgress(100);
+            statusView.setText(R.string.size_review_title);
+            etaView.setText("Beräknad tid kvar: 0:00");
+            downloadButton.setEnabled(false);
+            if (!sizeReviewShown) {
+                sizeReviewShown = true;
+                startActivityForResult(new Intent(this, SizeReviewActivity.class), REQ_SIZES);
+            }
+            refreshStartState();
             return;
         }
         if (state.done && state.xlsx != null) {

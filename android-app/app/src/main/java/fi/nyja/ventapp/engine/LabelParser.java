@@ -188,6 +188,49 @@ public final class LabelParser {
         return parseAirflowToken(text) != null;
     }
 
+    /**
+     * A size can be written automatically when it is one clear value.
+     * A missing size, several ranges, or extra words such as Ca, RO and ALSC need the user.
+     */
+    public static boolean sizeIsClear(String raw, String size) {
+        if (size == null || size.trim().isEmpty()) {
+            return false;
+        }
+        if (raw == null || raw.trim().isEmpty()) {
+            return true;
+        }
+        String norm = normalize(raw);
+        int ranges = 0;
+        Matcher range = SIZE_RANGE.matcher(norm);
+        while (range.find()) {
+            ranges++;
+        }
+        if (ranges > 1) {
+            return false;
+        }
+        String letters = norm;
+        VentCatalog names = current();
+        for (VentCatalog.Row row : names.tilluftRows()) {
+            letters = letters.replace(row.key.toUpperCase(Locale.ROOT), " ");
+        }
+        for (VentCatalog.Row row : names.franluftRows()) {
+            letters = letters.replace(row.key.toUpperCase(Locale.ROOT), " ");
+        }
+        letters = letters.replaceAll("[0-9+\\-*/xX.,()%]", " ");
+        String[] words = letters.trim().split("\\s+");
+        for (int i = 0; i < words.length; i++) {
+            String word = words[i];
+            if (word.length() < 2) {
+                continue;
+            }
+            if ("LS".equals(word) || "M3".equals(word) || "M3H".equals(word)) {
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
     public static boolean looksLikeDuctSize(String text) {
         if (text == null) {
             return false;

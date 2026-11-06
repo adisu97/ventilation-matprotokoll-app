@@ -305,7 +305,53 @@ public final class ProtocolBuilder {
         return Math.sqrt(dx * dx + dy * dy);
     }
 
+    public static final class Prepared {
+        public final List<ProtocolRow> rows;
+        public final List<PendingSize> pending;
+
+        Prepared(List<ProtocolRow> rows, List<PendingSize> pending) {
+            this.rows = rows;
+            this.pending = pending;
+        }
+    }
+
     public static List<ProtocolRow> pair(List<Room> rooms, List<Vent> vents) {
+        return collect(rooms, vents, null);
+    }
+
+    /** Confident rows, plus vents whose size the user must type before they are inserted. */
+    public static Prepared prepare(List<Room> rooms, List<Vent> vents) {
+        List<PendingSize> pending = new ArrayList<PendingSize>();
+        return new Prepared(collect(rooms, vents, pending), pending);
+    }
+
+    /**
+     * Insert a vent after the user typed its size. An empty size inserts nothing.
+     * The raw label is not parsed again, so a cancelled field cannot invent a size.
+     */
+    public static List<ProtocolRow> rowsForConfirmedSize(List<ProtocolRow> existing, PendingSize item, String typed) {
+        List<ProtocolRow> none = new ArrayList<ProtocolRow>();
+        if (item == null || item.vent == null || typed == null || typed.trim().isEmpty()) {
+            return none;
+        }
+        Vent vent = new Vent(item.vent.name, item.vent.kind, typed.trim(), item.vent.airflow, item.vent.qty,
+                item.vent.x, item.vent.y, "", item.vent.confidence);
+        boolean taken = false;
+        if (existing != null && item.room != null && !item.room.isEmpty()) {
+            for (int i = 0; i < existing.size(); i++) {
+                if (item.room.equals(existing.get(i).room)) {
+                    taken = true;
+                    break;
+                }
+            }
+        }
+        boolean unknown = item.room == null || item.room.isEmpty() || "okänt utrymme".equals(item.room);
+        String label = taken ? "" : item.room;
+        return rowsForRoom(label, java.util.Collections.singletonList(vent), vent.confidence,
+                unknown && !taken, null, null);
+    }
+
+    private static List<ProtocolRow> collect(List<Room> rooms, List<Vent> vents, List<PendingSize> pending) {
         Map<String, List<Vent>> grouped = new LinkedHashMap<String, List<Vent>>();
         Map<String, Double> confidence = new LinkedHashMap<String, Double>();
         Map<String, String> distanceNote = new LinkedHashMap<String, String>();
@@ -365,15 +411,25 @@ public final class ProtocolBuilder {
         for (String key : order) {
             String label = key.isEmpty() ? "okänt utrymme" : key;
             double roomConf = confidence.containsKey(key) ? confidence.get(key) : 0.4;
-            rows.addAll(rowsForRoom(label, grouped.get(key), roomConf, key.isEmpty(), distanceNote.get(key)));
+            rows.addAll(rowsForRoom(label, grouped.get(key), roomConf, key.isEmpty(), distanceNote.get(key), pending));
         }
         return rows;
     }
 
     private static List<ProtocolRow> rowsForRoom(String label, List<Vent> vents, double roomConf, boolean unknown,
-            String distanceNote) {
-        List<Vent> expanded = new ArrayList<Vent>();
+            String distanceNote, List<PendingSize> pending) {
+        List<Vent> usable = new ArrayList<Vent>();
+        boolean asked = false;
         for (Vent vent : vents) {
+            if (pending != null && !LabelParser.sizeIsClear(vent.raw, vent.size)) {
+                pending.add(new PendingSize(-1, label, vent));
+                asked = true;
+                continue;
+            }
+            usable.add(vent);
+        }
+        List<Vent> expanded = new ArrayList<Vent>();
+        for (Vent vent : usable) {
             expanded.addAll(expand(vent));
         }
         List<Vent> exhaust = new ArrayList<Vent>();
@@ -388,6 +444,9 @@ public final class ProtocolBuilder {
         int n = Math.max(exhaust.size(), supply.size());
         List<ProtocolRow> rows = new ArrayList<ProtocolRow>();
         if (n == 0) {
+            if (asked) {
+                return rows;
+            }
             rows.add(new ProtocolRow(label, "", null, null, "", null, null, true, "inget don i rummet", roomConf));
             return rows;
         }

@@ -68,8 +68,6 @@ public final class ProtocolXlsx {
         while (relMax.find()) {
             relNum = Math.max(relNum, Integer.parseInt(relMax.group(1)) + 1);
         }
-        List<ProtocolRow> unsure = new ArrayList<ProtocolRow>();
-        List<String> unsureSource = new ArrayList<String>();
         for (DrawingSheet drawing : drawings) {
             String sheetName = SheetNames.unique(drawing.sheetName, names);
             names.add(sheetName);
@@ -80,25 +78,9 @@ public final class ProtocolXlsx {
             workbook = insertSheet(workbook, sheetName, sheetId, rid);
             rels = insertRel(rels, rid, "/xl/worksheets/sheet" + fileNum + ".xml");
             contentTypes = insertOverride(contentTypes, "/xl/worksheets/sheet" + fileNum + ".xml");
-            for (ProtocolRow row : drawing.rows) {
-                if (row.unsure) {
-                    unsure.add(row);
-                    unsureSource.add(sheetName);
-                }
-            }
             sheetId++;
             fileNum++;
             relNum++;
-        }
-        if (!unsure.isEmpty()) {
-            String sheetName = SheetNames.unique("Osäkra", names);
-            String xml = unsureXml(unsure, unsureSource);
-            String part = "xl/worksheets/sheet" + fileNum + ".xml";
-            zip.put(part, xml.getBytes(StandardCharsets.UTF_8));
-            String rid = "rId" + relNum;
-            workbook = insertSheet(workbook, sheetName, sheetId, rid);
-            rels = insertRel(rels, rid, "/xl/worksheets/sheet" + fileNum + ".xml");
-            contentTypes = insertOverride(contentTypes, "/xl/worksheets/sheet" + fileNum + ".xml");
         }
         if (fromTemplate) {
             workbook = dropPrototypeSheets(workbook);

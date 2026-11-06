@@ -15,6 +15,7 @@ import java.util.List;
 
 import fi.nyja.ventapp.engine.OcrGeometry;
 import fi.nyja.ventapp.engine.OcrToken;
+import fi.nyja.ventapp.engine.PendingSize;
 import fi.nyja.ventapp.engine.ProtocolBuilder;
 import fi.nyja.ventapp.engine.TokenCleanup;
 import fi.nyja.ventapp.engine.ProtocolRow;
@@ -34,11 +35,20 @@ public final class DrawingExtractor {
         public final byte[] xlsx;
         public final List<String> notes;
         public final String debug;
+        public final List<ProtocolXlsx.DrawingSheet> sheets;
+        public final List<PendingSize> pending;
+        public final byte[] template;
+        public final boolean fromTemplate;
 
-        public Outcome(byte[] xlsx, List<String> notes, String debug) {
+        public Outcome(byte[] xlsx, List<String> notes, String debug, List<ProtocolXlsx.DrawingSheet> sheets,
+                List<PendingSize> pending, byte[] template, boolean fromTemplate) {
             this.xlsx = xlsx;
             this.notes = notes;
             this.debug = debug == null ? "" : debug;
+            this.sheets = sheets;
+            this.pending = pending;
+            this.template = template;
+            this.fromTemplate = fromTemplate;
         }
     }
 
@@ -53,6 +63,7 @@ public final class DrawingExtractor {
         boolean fromTemplate = existingUri == null;
         PpOcr ocr = openOcr(context);
         List<ProtocolXlsx.DrawingSheet> sheets = new ArrayList<ProtocolXlsx.DrawingSheet>();
+        List<PendingSize> pending = new ArrayList<PendingSize>();
         List<String> notes = new ArrayList<String>();
         List<String> usedNames = new ArrayList<String>();
         StringBuilder debug = new StringBuilder();
@@ -74,7 +85,12 @@ public final class DrawingExtractor {
                     }, debug, notes);
                     List<Room> rooms = ProtocolBuilder.roomsFromTokens(tokens);
                     List<Vent> vents = ProtocolBuilder.ventsFromTokens(tokens);
-                    List<ProtocolRow> rows = ProtocolBuilder.pair(rooms, vents);
+                    ProtocolBuilder.Prepared prepared = ProtocolBuilder.prepare(rooms, vents);
+                    List<ProtocolRow> rows = prepared.rows;
+                    int sheetIndex = sheets.size();
+                    for (int p = 0; p < prepared.pending.size(); p++) {
+                        pending.add(prepared.pending.get(p).atSheet(sheetIndex));
+                    }
                     int unsure = 0;
                     for (ProtocolRow row : rows) {
                         if (row.unsure) {
@@ -87,11 +103,13 @@ public final class DrawingExtractor {
                             + "OCR-kvar: " + ocr.kept + "\n"
                             + "rum: " + rooms.size() + "\n"
                             + "don: " + vents.size() + "\n"
-                            + "osäkra: " + unsure + "\n\n";
+                            + "osäkra: " + unsure + "\n"
+                            + "storlek frågas: " + prepared.pending.size() + "\n\n";
                     debug.insert(mark, summary);
                     debug.append("rum: ").append(rooms.size()).append("\n");
                     debug.append("don: ").append(vents.size()).append("\n");
-                    debug.append("osäkra: ").append(unsure).append("\n\n");
+                    debug.append("osäkra: ").append(unsure).append("\n");
+                    debug.append("storlek frågas: ").append(prepared.pending.size()).append("\n\n");
                     if (rooms.isEmpty() && vents.isEmpty()) {
                         if (ocr.boxes == 0) {
                             notes.add(entry.name + ": OCR hittade 0 rutor. Ingen text att tolka.");
@@ -122,7 +140,8 @@ public final class DrawingExtractor {
         if (sheets.isEmpty()) {
             throw new IllegalStateException("Ingen ritning kunde läsas.");
         }
-        return new Outcome(ProtocolXlsx.build(base, sheets, fromTemplate), notes, debug.toString());
+        byte[] xlsx = pending.isEmpty() ? ProtocolXlsx.build(base, sheets, fromTemplate) : null;
+        return new Outcome(xlsx, notes, debug.toString(), sheets, pending, base, fromTemplate);
     }
 
     private static PpOcr openOcr(Context context) throws Exception {

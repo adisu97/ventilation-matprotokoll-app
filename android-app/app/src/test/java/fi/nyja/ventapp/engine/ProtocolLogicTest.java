@@ -562,6 +562,60 @@ public class ProtocolLogicTest {
     }
 
     @Test
+    public void unclearSizeWaitsForTheUserAndOsakraIsGone() throws Exception {
+        String raw = "LOCKZONE Ca 250-600-RO+ALSC 200-250/60";
+        Vent messy = LabelParser.parse(raw, 30, 10, 0.9);
+        assertNotNull(messy);
+        assertEquals("lockzone", messy.canonicalName());
+        assertEquals("supply", messy.kind);
+        assertFalse(LabelParser.sizeIsClear(messy.raw, messy.size));
+        Vent bare = LabelParser.parse("LOCKZONE", 0, 0, 0.9);
+        assertNotNull(bare);
+        assertFalse(LabelParser.sizeIsClear(bare.raw, bare.size));
+        Vent clear = new Vent("kso", "exhaust", "125", 20.0, 1, 4, 4, "KSO-125 -20", 0.95);
+        assertTrue(LabelParser.sizeIsClear(clear.raw, clear.size));
+
+        Room room = new Room("E125", "WC", 0, 0, 0.95);
+        ProtocolBuilder.Prepared prepared = ProtocolBuilder.prepare(
+                Collections.singletonList(room), Arrays.asList(clear, messy));
+        assertEquals(1, prepared.rows.size());
+        assertEquals("kso", prepared.rows.get(0).exhaustName);
+        assertEquals("125", prepared.rows.get(0).exhaustSize);
+        assertEquals("", prepared.rows.get(0).supplyName);
+        assertEquals(1, prepared.pending.size());
+        assertTrue(prepared.pending.get(0).vent.raw.contains("LOCKZONE"));
+        assertTrue(prepared.pending.get(0).vent.raw.contains("250-600"));
+        assertTrue(ProtocolBuilder.rowsForConfirmedSize(prepared.rows, prepared.pending.get(0), " ").isEmpty());
+        assertTrue(ProtocolBuilder.rowsForConfirmedSize(prepared.rows, prepared.pending.get(0), null).isEmpty());
+        List<ProtocolRow> added = ProtocolBuilder.rowsForConfirmedSize(
+                prepared.rows, prepared.pending.get(0), "250");
+        assertEquals(1, added.size());
+        assertEquals("", added.get(0).room);
+        assertEquals("lockzone", added.get(0).supplyName);
+        assertEquals("250", added.get(0).supplySize);
+        assertNull(added.get(0).exhaustSize);
+
+        List<ProtocolRow> all = new ArrayList<ProtocolRow>(prepared.rows);
+        all.addAll(added);
+        File template = new File("../../templates/matprotokoll_grund.xlsx");
+        if (!template.isFile()) {
+            template = new File("../templates/matprotokoll_grund.xlsx");
+        }
+        byte[] xlsx = ProtocolXlsx.build(
+                java.nio.file.Files.readAllBytes(template.toPath()),
+                Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", all)),
+                true);
+        String workbook = zipText(xlsx, "xl/workbook.xml");
+        assertFalse(workbook.contains("Osäkra"));
+        String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
+        assertTrue(plan.contains(">kso</t>"));
+        assertTrue(plan.contains(">125</t>"));
+        assertTrue(plan.contains(">lockzone</t>"));
+        assertTrue(plan.contains(">250</t>"));
+        assertFalse(plan.contains("250-600"));
+    }
+
+    @Test
     public void parsesExhaustAndSupplyLabels() {
         Vent exhaust = LabelParser.parse("KSO-125 -20", 10, 20, 0.9);
         assertNotNull(exhaust);
@@ -684,7 +738,7 @@ public class ProtocolLogicTest {
         String workbook = zipText(xlsx, "xl/workbook.xml");
         assertTrue(workbook.contains("Koneet Maskiner"));
         assertTrue(workbook.contains("plan-a"));
-        assertTrue(workbook.contains("Osäkra"));
+        assertFalse(workbook.contains("Osäkra"));
         assertFalse(workbook.contains("name=\"Sheet1\""));
         String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
         assertTrue(plan.contains("Rumsnamn"));
@@ -737,8 +791,7 @@ public class ProtocolLogicTest {
         assertTrue(cover.contains("SUM(C9:C13)"));
         assertTrue(fullThinBorder(styles, styleOf(plan, "C2")));
         assertTrue(fullThinBorder(styles, styleOf(plan, "I2")));
-        String unsureSheet = zipEntryContaining(xlsx, "xl/worksheets/sheet", "storlek saknas");
-        assertTrue(unsureSheet.contains("E102 AULA"));
+        assertFalse(workbook.contains("Osäkra"));
     }
 
     private static boolean fullThinBorder(String styles, String styleIndex) {
