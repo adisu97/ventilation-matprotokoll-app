@@ -335,7 +335,7 @@ public class ProtocolLogicTest {
     public void roomExamplesAddPatternsBesideTheDefaults() {
         java.util.List<RoomFormats.Derived> formats = new java.util.ArrayList<RoomFormats.Derived>();
         RoomFormats.Derived letter = RoomFormats.derive("E125 WC");
-        assertEquals("bokstav + 3 siffror + namn", letter.summary);
+        assertEquals("bokstav + 3 siffror (±1) + namn", letter.summary);
         formats.add(letter);
         formats.add(RoomFormats.derive("101"));
         RoomFormats.Derived dotted = RoomFormats.derive("A.102 Kontor");
@@ -363,10 +363,10 @@ public class ProtocolLogicTest {
     @Test
     public void stackedRoomExamplePairsTheNameUnderTheNumber() throws Exception {
         RoomFormats.Derived wind = RoomFormats.derive("E111\nVINDFÅNG");
-        assertEquals("bokstav + 3 siffror, nummer på en rad + namn under", wind.summary);
+        assertEquals("bokstav + 3 siffror (±1), nummer på en rad + namn under", wind.summary);
         assertTrue(wind.stacked);
         assertEquals("E111\nVINDFÅNG", wind.example);
-        assertEquals("3 siffror, nummer på en rad + namn under", RoomFormats.derive("101\nKÖK").summary);
+        assertEquals("3 siffror (±1), nummer på en rad + namn under", RoomFormats.derive("101\nKÖK").summary);
         RoomFormats.Derived dotted = RoomFormats.derive("A.102\nKontor");
         assertTrue(dotted.summary.contains("\".\""));
         assertTrue(dotted.summary.contains("nummer på en rad + namn under"));
@@ -374,7 +374,7 @@ public class ProtocolLogicTest {
         assertNotNull(RoomFormats.derive("E111\nSTOR HALL"));
         assertNull(RoomFormats.derive("E111\nKSO"));
         assertNull(RoomFormats.derive("VINDFÅNG\nE111"));
-        assertEquals("bokstav + 3 siffror + namn", RoomFormats.derive("E125 WC").summary);
+        assertEquals("bokstav + 3 siffror (±1) + namn", RoomFormats.derive("E125 WC").summary);
 
         String stored = RoomFormats.encodeExamples(java.util.Arrays.asList("E111\nVINDFÅNG", "E125 WC"));
         java.util.List<String> back = RoomFormats.decodeExamples(stored);
@@ -398,7 +398,8 @@ public class ProtocolLogicTest {
             assertEquals("Kontor", RoomFormats.parse("A.102\nKontor").name);
             assertEquals("Nummer: E111  Namn: VINDFÅNG", RoomFormats.trial("E111\nVINDFÅNG"));
             assertEquals("Nummer: 101  Namn: KÖK", RoomFormats.trial("101\nKÖK"));
-            assertEquals("A.102", RoomFormats.parse("A.102 Kontor").number);
+            assertNull(RoomFormats.parse("A.102 Kontor"));
+            assertEquals("A.102", ProtocolBuilder.splitRoom("A.102 Kontor").number);
             assertEquals("Kontor", ProtocolBuilder.splitRoom("A.102 Kontor").name);
             assertEquals("E125", ProtocolBuilder.splitRoom("E125 WC").number);
             assertEquals("WC", ProtocolBuilder.splitRoom("E125 WC").name);
@@ -428,8 +429,8 @@ public class ProtocolLogicTest {
             assertEquals("Kontor", roomNamed(rooms, "A.102").name);
             assertEquals("WC", roomNamed(rooms, "E125").name);
             assertEquals("HALL", roomNamed(rooms, "B110").name);
-            assertEquals("", roomNamed(rooms, "E222").name);
-            assertEquals("", roomNamed(rooms, "F300").name);
+            assertFalse(hasRoom(rooms, "E222"));
+            assertFalse(hasRoom(rooms, "F300"));
 
             java.util.List<ProtocolRow> rows = ProtocolBuilder.pair(rooms, java.util.Collections.<Vent>emptyList());
             File template = new File("../../templates/matprotokoll_grund.xlsx");
@@ -452,6 +453,112 @@ public class ProtocolLogicTest {
         } finally {
             RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
         }
+    }
+
+    @Test
+    public void filledRoomFormatReplacesTheBroadScan() throws Exception {
+        assertEquals("2 siffror (±1), nummer på en rad + namn under", RoomFormats.derive("12\nWc").summary);
+        java.util.List<RoomFormats.Derived> stacked = new java.util.ArrayList<RoomFormats.Derived>();
+        stacked.add(RoomFormats.derive("12\nWc"));
+        RoomFormats.use(stacked);
+        try {
+            assertEquals("12", RoomFormats.parse("12\nWc").number);
+            assertEquals("Wc", RoomFormats.parse("12\nWc").name);
+            assertEquals("Nummer: 5  Namn: Kök", RoomFormats.trial("5\nKök"));
+            assertEquals("Nummer: 125  Namn: Keittiö", RoomFormats.trial("125\nKeittiö"));
+            assertEquals("Nummer: 12  Namn: Kitchen", RoomFormats.trial("12\nKitchen"));
+            assertEquals("Ingen träff.", RoomFormats.trial("1250\nWc"));
+            assertEquals("Ingen träff.", RoomFormats.trial("125 WC"));
+            assertNull(RoomFormats.parse("102AULA"));
+            assertNull(ProtocolBuilder.splitRoom("102AULA"));
+
+            java.util.List<OcrToken> tokens = new java.util.ArrayList<OcrToken>();
+            tokens.add(new OcrToken("5", 40, 40, 0.95, 16, 12));
+            tokens.add(new OcrToken("Kök", 42, 58, 0.95, 28, 12));
+            tokens.add(new OcrToken("12", 160, 40, 0.95, 20, 12));
+            tokens.add(new OcrToken("Wc", 158, 58, 0.95, 24, 12));
+            tokens.add(new OcrToken("125", 300, 40, 0.95, 28, 12));
+            tokens.add(new OcrToken("Keittiö", 310, 60, 0.95, 60, 12));
+            tokens.add(new OcrToken("8", 460, 40, 0.95, 16, 12));
+            tokens.add(new OcrToken("Bathroom", 470, 58, 0.95, 70, 12));
+            tokens.add(new OcrToken("80", 620, 40, 0.95, 20, 12));
+            tokens.add(new OcrToken("Förråd", 630, 60, 0.95, 50, 12));
+            tokens.add(new OcrToken("1234", 800, 40, 0.95, 36, 12));
+            tokens.add(new OcrToken("Kitchen", 800, 58, 0.95, 60, 12));
+            tokens.add(new OcrToken("125 WC", 40, 160, 0.95, 50, 12));
+            tokens.add(new OcrToken("48", 200, 160, 0.95, 20, 12));
+            tokens.add(new OcrToken("WC", 250, 160, 0.95, 24, 12));
+            tokens.add(new OcrToken("E125 WC", 400, 160, 0.95, 60, 12));
+            tokens.add(new OcrToken("102AULA", 560, 160, 0.95, 60, 12));
+            tokens.add(new OcrToken("LOCKZONE", 40, 240, 0.95, 70, 12));
+
+            java.util.List<Room> rooms = ProtocolBuilder.roomsFromTokens(tokens);
+            assertEquals("Kök", roomNamed(rooms, "5").name);
+            assertEquals("Wc", roomNamed(rooms, "12").name);
+            assertEquals("Keittiö", roomNamed(rooms, "125").name);
+            assertEquals("Bathroom", roomNamed(rooms, "8").name);
+            assertEquals("Förråd", roomNamed(rooms, "80").name);
+            assertFalse(hasRoom(rooms, "1234"));
+            assertFalse(hasRoom(rooms, "48"));
+            assertFalse(hasRoom(rooms, "E125"));
+            assertFalse(hasRoom(rooms, "102"));
+            assertFalse(hasRoom(rooms, "102AULA"));
+            assertEquals(5, rooms.size());
+            assertEquals(1, ProtocolBuilder.ventsFromTokens(tokens).size());
+
+            java.util.List<ProtocolRow> rows = ProtocolBuilder.pair(rooms, java.util.Collections.<Vent>emptyList());
+            File template = new File("../../templates/matprotokoll_grund.xlsx");
+            if (!template.isFile()) {
+                template = new File("../templates/matprotokoll_grund.xlsx");
+            }
+            byte[] xlsx = ProtocolXlsx.build(
+                    java.nio.file.Files.readAllBytes(template.toPath()),
+                    java.util.Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", rows)),
+                    true);
+            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
+            assertTrue(cellWindow(plan, "A2").contains(">5</t>"));
+            assertTrue(cellWindow(plan, "B2").contains(">Kök</t>"));
+            assertTrue(cellWindow(plan, "A4").contains(">125</t>"));
+            assertTrue(cellWindow(plan, "B4").contains(">Keittiö</t>"));
+        } finally {
+            RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
+        }
+
+        RoomFormats.use(java.util.Collections.singletonList(RoomFormats.derive("E111\nVINDFÅNG")));
+        try {
+            java.util.List<OcrToken> tokens = new java.util.ArrayList<OcrToken>();
+            tokens.add(new OcrToken("E11", 100, 100, 0.95, 30, 12));
+            tokens.add(new OcrToken("Kök", 100, 118, 0.95, 28, 12));
+            tokens.add(new OcrToken("E111", 240, 100, 0.95, 36, 12));
+            tokens.add(new OcrToken("VINDFÅNG", 246, 118, 0.95, 70, 12));
+            tokens.add(new OcrToken("E1111", 420, 100, 0.95, 42, 12));
+            tokens.add(new OcrToken("Bathroom", 430, 118, 0.95, 70, 12));
+            tokens.add(new OcrToken("E11111", 640, 100, 0.95, 50, 12));
+            tokens.add(new OcrToken("Förråd", 640, 118, 0.95, 50, 12));
+            tokens.add(new OcrToken("111", 800, 100, 0.95, 28, 12));
+            tokens.add(new OcrToken("Kitchen", 800, 118, 0.95, 60, 12));
+            tokens.add(new OcrToken("EE111", 960, 100, 0.95, 40, 12));
+            tokens.add(new OcrToken("Hall", 960, 118, 0.95, 30, 12));
+            java.util.List<Room> rooms = ProtocolBuilder.roomsFromTokens(tokens);
+            assertEquals("Kök", roomNamed(rooms, "E11").name);
+            assertEquals("VINDFÅNG", roomNamed(rooms, "E111").name);
+            assertEquals("Bathroom", roomNamed(rooms, "E1111").name);
+            assertFalse(hasRoom(rooms, "E11111"));
+            assertFalse(hasRoom(rooms, "111"));
+            assertFalse(hasRoom(rooms, "EE111"));
+        } finally {
+            RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
+        }
+
+        RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
+        java.util.List<OcrToken> open = new java.util.ArrayList<OcrToken>();
+        open.add(new OcrToken("E125 WC", 10, 20, 1, 40, 10));
+        open.add(new OcrToken("102AULA", 80, 20, 1, 50, 10));
+        open.add(new OcrToken("E999", 160, 20, 1, 30, 10));
+        java.util.List<Room> broad = ProtocolBuilder.roomsFromTokens(open);
+        assertEquals("WC", roomNamed(broad, "E125").name);
+        assertEquals("AULA", roomNamed(broad, "102").name);
+        assertTrue(hasRoom(broad, "E999"));
     }
 
     @Test
@@ -712,6 +819,15 @@ public class ProtocolLogicTest {
         java.util.regex.Matcher rgb = java.util.regex.Pattern.compile("rgb=\"([0-9A-Fa-f]+)\"").matcher(body);
         assertTrue(body, rgb.find());
         return rgb.group(1).toUpperCase();
+    }
+
+    private static boolean hasRoom(List<Room> rooms, String number) {
+        for (Room room : rooms) {
+            if (number.equals(room.number)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Room roomNamed(List<Room> rooms, String number) {

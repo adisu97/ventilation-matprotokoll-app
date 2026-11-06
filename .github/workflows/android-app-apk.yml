@@ -49,7 +49,7 @@ jobs:
         working-directory: android-app
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Kontrollera Starta överst och versionCode 18
+      - name: Kontrollera Starta överst och versionCode 19
         run: |
           set -euo pipefail
           APK="android-app/app/build/outputs/apk/universal/release/app-universal-release.apk"
@@ -57,7 +57,7 @@ jobs:
           badging="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"
           code="$(printf '%s\n' "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
           echo "versionCode=$code"
-          test "$code" = "18"
+          test "$code" = "19"
           printf '%s\n' "$badging" | grep -F "fi.nyja.ventapp.MainActivity" >/dev/null
           found=0
           while IFS= read -r layout; do
@@ -106,7 +106,7 @@ jobs:
             badging="$("$AAPT" dump badging "$out" 2>/dev/null || true)"
             printf '%s\n' "$badging" | grep -q "sdkVersion:'21'"
             printf '%s\n' "$badging" | grep -q "targetSdkVersion:'35'"
-            printf '%s\n' "$badging" | grep -q "versionCode='18'"
+            printf '%s\n' "$badging" | grep -q "versionCode='19'"
             printf '%s\n' "$badging" | grep -q "name='fi.nyja.ventapp'"
             if printf '%s\n' "$badging" | grep -q "application-debuggable"; then
               echo "debuggable APK: $out" >&2
@@ -143,17 +143,18 @@ jobs:
           fi
           echo "sizes:"
           ls -l ventapp.apk ventapp-arm64.apk
-          sha256sum ventapp.apk ventapp-arm64.apk | tee SHA256SUMS
+          sha256sum ventapp.apk ventapp-arm64.apk | tee SHA256SUMS.txt
           cat > release-body.md << EOF
-          Mätprotokoll för Android, version 1.18 (versionCode 18), targetSdk 35. Signerad med v1+v2+v3 och samma sideload-nyckel som version 5.
+          Mätprotokoll för Android, version 1.19 (versionCode 19), targetSdk 35. Signerad med v1+v2+v3 och samma sideload-nyckel som version 5.
 
           ventapp-arm64.apk ($(stat -c%s ventapp-arm64.apk) byte) är den mindre filen, bara arm64-v8a, för telefoner som Galaxy A52.
           ventapp.apk ($(stat -c%s ventapp.apk) byte) innehåller arm64-v8a och armeabi-v7a.
 
-          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-15/ventapp-arm64.apk
-          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-15/ventapp.apk
+          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-16/ventapp-arm64.apk
+          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-16/ventapp.apk
+          https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-16/SHA256SUMS.txt
 
-          Rumsformat tar också två rader: numret på en rad och namnet direkt under. Samma form används på textlager och OCR.
+          Om Rumsformat är ifyllt söks bara den formen, plus vanliga rumsnamn på svenska, engelska och finska. Två rader betyder nummer ovanför namn. Siffrorna får vara en fler eller en färre än i exemplet.
 
           Den stora procenttexten är borta. Förloppsrad, status och beräknad tid finns kvar. Ritningar utan textlager OCR-läses i 300 dpi.
 
@@ -163,10 +164,10 @@ jobs:
           EOF
           sed -i 's/^          //' release-body.md
 
-      - name: Publicera förhandsrelease app-apk-15
+      - name: Publicera förhandsrelease app-apk-16
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-apk-15
+          tag_name: app-apk-16
           target_commitish: ${{ github.sha }}
           name: Mätprotokoll Android
           draft: false
@@ -177,7 +178,7 @@ jobs:
           files: |
             ventapp.apk
             ventapp-arm64.apk
-            SHA256SUMS
+            SHA256SUMS.txt
 
   download-test:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'dl-test-1')

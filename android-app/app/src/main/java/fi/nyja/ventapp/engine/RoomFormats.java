@@ -12,8 +12,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Extra room shapes learned from the user's examples, used together with the built-in patterns.
- * A two-line example means the room number is on one line and the name is stacked under it.
+ * Room shapes learned from the user's examples.
+ * When at least one example is saved, it replaces the built-in room-number search.
+ * A two-line example means the number is on its own line and the name is stacked under it.
+ * Digit runs accept one digit more or less than the example, and never zero digits.
  */
 public final class RoomFormats {
     private static final char RECORD = '\u001e';
@@ -28,15 +30,22 @@ public final class RoomFormats {
         public final String example;
         public final String summary;
         public final boolean stacked;
+        public final boolean wantsName;
         final Pattern pattern;
         final Pattern numberLine;
+        final Pattern labelPattern;
+        final String exampleName;
 
-        Derived(String example, String summary, Pattern pattern, boolean stacked, Pattern numberLine) {
+        Derived(String example, String summary, Pattern pattern, boolean stacked, Pattern numberLine,
+                String numberRegex, boolean wantsName, String exampleName) {
             this.example = example;
             this.summary = summary;
             this.pattern = pattern;
             this.stacked = stacked;
             this.numberLine = numberLine;
+            this.wantsName = wantsName;
+            this.exampleName = exampleName;
+            this.labelPattern = Pattern.compile("^(" + numberRegex + ")\\s+(.+)$", Pattern.CASE_INSENSITIVE);
         }
     }
 
@@ -51,6 +60,113 @@ public final class RoomFormats {
 
     public static List<Derived> current() {
         return active;
+    }
+
+    /** True when the user has saved at least one room example. The broad scan stays off then. */
+    public static boolean constrains() {
+        return !active.isEmpty();
+    }
+
+    public static boolean hasInline() {
+        for (int i = 0; i < active.size(); i++) {
+            if (!active.get(i).stacked) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean matchesStackedNumber(String text) {
+        return matchesNumber(text, true);
+    }
+
+    public static boolean matchesInlineNumber(String text) {
+        return matchesNumber(text, false);
+    }
+
+    /** An example that is only a number, such as 101, with no room name beside or under it. */
+    public static boolean matchesNumberOnlyExample(String text) {
+        if (text == null) {
+            return false;
+        }
+        for (int i = 0; i < active.size(); i++) {
+            Derived derived = active.get(i);
+            if (!derived.stacked && !derived.wantsName && derived.numberLine.matcher(text).matches()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A name from the Swedish, English and Finnish list, or the exact name in a saved example.
+     */
+    public static boolean acceptedRoomName(String text) {
+        if (text == null || text.trim().isEmpty() || LatinScript.hasCjk(text)) {
+            return false;
+        }
+        if (LatinScript.isKnownRoomName(text)) {
+            return true;
+        }
+        for (int i = 0; i < active.size(); i++) {
+            String exampleName = active.get(i).exampleName;
+            if (exampleName != null && LatinScript.sameRoomName(exampleName, text)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whole token written as one line, for an example that was itself one line. */
+    public static ProtocolBuilder.RoomText parseInline(String text) {
+        if (text == null) {
+            return null;
+        }
+        String raw = text.trim();
+        for (int i = 0; i < active.size(); i++) {
+            Derived derived = active.get(i);
+            if (derived.stacked) {
+                continue;
+            }
+            Matcher matcher = derived.pattern.matcher(raw);
+            if (!matcher.matches()) {
+                continue;
+            }
+            String name = matcher.groupCount() >= 2 && matcher.group(2) != null ? matcher.group(2).trim() : "";
+            if (!name.isEmpty() && !acceptedRoomName(name)) {
+                continue;
+            }
+            if (derived.wantsName && name.isEmpty()) {
+                continue;
+            }
+            return room(matcher.group(1), name);
+        }
+        return null;
+    }
+
+    /** Excel stores "number name" even when the drawing had the name on the next line. */
+    public static ProtocolBuilder.RoomText splitJoinedLabel(String text) {
+        if (text == null) {
+            return null;
+        }
+        String raw = text.trim();
+        for (int i = 0; i < active.size(); i++) {
+            Matcher matcher = active.get(i).labelPattern.matcher(raw);
+            if (!matcher.matches()) {
+                continue;
+            }
+            String name = matcher.group(2).trim();
+            if (!acceptedRoomName(name)) {
+                continue;
+            }
+            return room(matcher.group(1), name);
+        }
+        return null;
+    }
+
+    /** Geometry score for a name under a number, or above it when nothing is under. */
+    public static Double stackedScore(OcrToken number, OcrToken name) {
+        return placementScore(number, name);
     }
 
     /** One record per example. A stacked example keeps its own newline. */
@@ -122,12 +238,21 @@ public final class RoomFormats {
         }
         String raw = lines.get(0);
         for (Derived derived : active) {
+            if (derived.stacked) {
+                if (derived.numberLine != null && derived.numberLine.matcher(raw).matches()) {
+                    return room(raw, "");
+                }
+                continue;
+            }
             Matcher matcher = derived.pattern.matcher(raw);
             if (!matcher.matches()) {
                 continue;
             }
             String name = matcher.groupCount() >= 2 && matcher.group(2) != null ? matcher.group(2).trim() : "";
-            if (!name.isEmpty() && !nameLine(name)) {
+            if (!name.isEmpty() && !acceptedRoomName(name)) {
+                continue;
+            }
+            if (derived.wantsName && name.isEmpty()) {
                 continue;
             }
             return room(matcher.group(1), name);
@@ -161,7 +286,7 @@ public final class RoomFormats {
                 }
                 OcrToken name = tokens.get(j);
                 String nameText = LatinScript.clean(name.text).trim();
-                if (!nameLine(nameText)) {
+                if (!acceptedRoomName(nameText)) {
                     continue;
                 }
                 Double score = placementScore(number, name);
@@ -220,11 +345,29 @@ public final class RoomFormats {
         }
         String number = parts[numberAt];
         boolean nameAfter = numberAt + 1 < parts.length;
+        String exampleName = null;
+        if (nameAfter) {
+            StringBuilder joined = new StringBuilder();
+            for (int i = numberAt + 1; i < parts.length; i++) {
+                if (!nameLine(parts[i]) && !acceptedRoomName(parts[i])) {
+                    return null;
+                }
+                if (joined.length() > 0) {
+                    joined.append(' ');
+                }
+                joined.append(parts[i]);
+            }
+            exampleName = joined.toString();
+            if (!nameLine(exampleName) && !acceptedRoomName(exampleName)) {
+                return null;
+            }
+        }
         String numberRegex = structure(number);
         String summary = describe(number, nameAfter);
-        String namePart = nameAfter ? "(?:\\s+([A-ZÅÄÖa-zåäö][A-ZÅÄÖa-zåäö ._-]{0,40}))?" : "";
+        String namePart = nameAfter ? "\\s+([A-ZÅÄÖa-zåäö][A-ZÅÄÖa-zåäö ._-]{0,40})" : "";
         Pattern pattern = Pattern.compile("^(" + numberRegex + ")" + namePart + "$", Pattern.CASE_INSENSITIVE);
-        return new Derived(raw, summary, pattern, false, null);
+        Pattern numberLine = Pattern.compile("^" + numberRegex + "$", Pattern.CASE_INSENSITIVE);
+        return new Derived(raw, summary, pattern, false, numberLine, numberRegex, nameAfter, exampleName);
     }
 
     private static Derived deriveStacked(String number, String name) {
@@ -234,12 +377,11 @@ public final class RoomFormats {
         String numberRegex = structure(number);
         String summary = describe(number, false) + ", nummer på en rad + namn under";
         Pattern numberLine = Pattern.compile("^" + numberRegex + "$", Pattern.CASE_INSENSITIVE);
-        Pattern joined = Pattern.compile("^(" + numberRegex + ")(?:\\s+(.+))?$", Pattern.CASE_INSENSITIVE);
-        return new Derived(number + "\n" + name, summary, joined, true, numberLine);
+        return new Derived(number + "\n" + name, summary, numberLine, true, numberLine, numberRegex, true, name);
     }
 
     private static ProtocolBuilder.RoomText parseStackedLines(String numberLine, String nameLine) {
-        if (!nameLine(nameLine)) {
+        if (!acceptedRoomName(nameLine)) {
             return null;
         }
         for (Derived derived : active) {
@@ -254,12 +396,16 @@ public final class RoomFormats {
         return null;
     }
 
-    private static boolean matchesStackedNumber(String text) {
+    private static boolean matchesNumber(String text, boolean stacked) {
         if (text == null || text.isEmpty()) {
             return false;
         }
-        for (Derived derived : active) {
-            if (derived.stacked && derived.numberLine != null && derived.numberLine.matcher(text).matches()) {
+        for (int i = 0; i < active.size(); i++) {
+            Derived derived = active.get(i);
+            if (derived.stacked != stacked || derived.numberLine == null) {
+                continue;
+            }
+            if (derived.numberLine.matcher(text).matches()) {
                 return true;
             }
         }
@@ -358,7 +504,9 @@ public final class RoomFormats {
                 while (i + n < number.length() && Character.isDigit(number.charAt(i + n))) {
                     n++;
                 }
-                regex.append("\\d{").append(n).append('}');
+                int min = Math.max(1, n - 1);
+                int max = n + 1;
+                regex.append("\\d{").append(min).append(',').append(max).append('}');
                 i += n;
             } else {
                 regex.append(Pattern.quote(String.valueOf(c)));
@@ -388,7 +536,7 @@ public final class RoomFormats {
                 while (i + n < number.length() && Character.isDigit(number.charAt(i + n))) {
                     n++;
                 }
-                text.append(n).append(n == 1 ? " siffra" : " siffror");
+                text.append(n).append(n == 1 ? " siffra (±1)" : " siffror (±1)");
                 i += n;
             } else {
                 text.append("\"").append(c).append("\"");

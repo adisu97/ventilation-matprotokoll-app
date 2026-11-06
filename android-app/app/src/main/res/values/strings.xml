@@ -8,7 +8,7 @@
     <string name="vent_names">Ventilnamn</string>
     <string name="room_formats">Rumsformat</string>
     <string name="room_formats_title">Rumsformat</string>
-    <string name="room_formats_help">Skriv exempel på hur rumsnummer och namn ser ut på ritningen. En rad är nummer och namn efter varandra. Två rader betyder att numret står på en rad och namnet direkt under, som på ritningen. Appen läser av samma form, utöver standarden.</string>
+    <string name="room_formats_help">Skriv exempel på hur rumsnummer och namn ser ut på ritningen. När ett exempel finns söker appen bara efter den formen, plus vanliga rumsnamn på svenska, engelska och finska. En rad är nummer och namn efter varandra. Två rader betyder att numret står ovanför namnet. Antalet siffror får avvika med en.</string>
     <string name="room_example_hint">E125 WC, eller två rader:\nE111\nVINDFÅNG</string>
     <string name="room_example_invalid">Skriv ett exempel med siffror. Två rader: numret först, namnet under (bokstäver, åäö, mellanslag eller bindestreck).</string>
     <string name="room_example_exists">Exemplet finns redan.</string>

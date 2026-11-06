@@ -29,6 +29,189 @@ public final class ProtocolBuilder {
     }
 
     public static List<Room> roomsFromTokens(List<OcrToken> tokens) {
+        if (RoomFormats.constrains()) {
+            return mergeCloseRooms(roomsFromExamples(tokens));
+        }
+        return mergeCloseRooms(roomsFromBroadScan(tokens));
+    }
+
+    /**
+     * One pass keeps only numbers that match a saved example and known room names.
+     * Pairing then looks only at those two short lists, and only in the example's layout.
+     */
+    private static List<Room> roomsFromExamples(List<OcrToken> tokens) {
+        List<OcrToken> numbers = new ArrayList<OcrToken>();
+        List<Integer> numberAt = new ArrayList<Integer>();
+        List<OcrToken> names = new ArrayList<OcrToken>();
+        Room[] placed = new Room[tokens == null ? 0 : tokens.size()];
+        if (tokens == null) {
+            return new ArrayList<Room>();
+        }
+        for (int i = 0; i < tokens.size(); i++) {
+            OcrToken token = tokens.get(i);
+            String text = LatinScript.clean(token.text).trim();
+            if (text.isEmpty() || text.length() > 48 || LatinScript.hasCjk(text)) {
+                continue;
+            }
+            if (RoomFormats.hasInline()) {
+                RoomText inline = RoomFormats.parseInline(text);
+                if (inline != null && !inline.name.isEmpty()) {
+                    placed[i] = new Room(inline.number, inline.name, token.x, token.y, token.confidence);
+                    continue;
+                }
+            }
+            boolean stackedNumber = RoomFormats.matchesStackedNumber(text);
+            boolean inlineNumber = RoomFormats.matchesInlineNumber(text);
+            if ((stackedNumber || inlineNumber) && !isVentLabel(text, token)) {
+                numbers.add(token);
+                numberAt.add(i);
+                continue;
+            }
+            if (!hasDigit(text) && RoomFormats.acceptedRoomName(text)) {
+                names.add(token);
+            }
+        }
+        boolean[] nameUsed = new boolean[names.size()];
+        boolean[] numberUsed = new boolean[numbers.size()];
+        assignStacked(numbers, numberAt, names, nameUsed, numberUsed, placed);
+        assignInline(numbers, numberAt, names, nameUsed, numberUsed, placed);
+        for (int i = 0; i < numbers.size(); i++) {
+            if (numberUsed[i]) {
+                continue;
+            }
+            OcrToken token = numbers.get(i);
+            String text = LatinScript.clean(token.text).trim();
+            if (!RoomFormats.matchesNumberOnlyExample(text)) {
+                continue;
+            }
+            RoomText parts = RoomFormats.parseInline(text);
+            if (parts == null) {
+                parts = new RoomText(text.toUpperCase(Locale.ROOT), "");
+            }
+            if (LabelParser.looksLikeDuctSize(parts.number)) {
+                continue;
+            }
+            placed[numberAt.get(i)] = new Room(parts.number, "", token.x, token.y, token.confidence);
+        }
+        List<Room> rooms = new ArrayList<Room>();
+        for (int i = 0; i < placed.length; i++) {
+            if (placed[i] != null) {
+                rooms.add(placed[i]);
+            }
+        }
+        return rooms;
+    }
+
+    private static void assignStacked(List<OcrToken> numbers, List<Integer> numberAt, List<OcrToken> names,
+            boolean[] nameUsed, boolean[] numberUsed, Room[] placed) {
+        List<NameLink> links = new ArrayList<NameLink>();
+        for (int i = 0; i < numbers.size(); i++) {
+            String text = LatinScript.clean(numbers.get(i).text).trim();
+            if (!RoomFormats.matchesStackedNumber(text)) {
+                continue;
+            }
+            for (int j = 0; j < names.size(); j++) {
+                Double score = RoomFormats.stackedScore(numbers.get(i), names.get(j));
+                if (score == null) {
+                    continue;
+                }
+                links.add(new NameLink(i, j, score));
+            }
+        }
+        takeLinks(links, numbers, numberAt, names, nameUsed, numberUsed, placed);
+    }
+
+    private static void assignInline(List<OcrToken> numbers, List<Integer> numberAt, List<OcrToken> names,
+            boolean[] nameUsed, boolean[] numberUsed, Room[] placed) {
+        List<NameLink> links = new ArrayList<NameLink>();
+        for (int i = 0; i < numbers.size(); i++) {
+            if (numberUsed[i]) {
+                continue;
+            }
+            String text = LatinScript.clean(numbers.get(i).text).trim();
+            if (!RoomFormats.matchesInlineNumber(text)) {
+                continue;
+            }
+            for (int j = 0; j < names.size(); j++) {
+                if (nameUsed[j]) {
+                    continue;
+                }
+                Double score = inlineScore(numbers.get(i), names.get(j));
+                if (score == null) {
+                    continue;
+                }
+                links.add(new NameLink(i, j, score));
+            }
+        }
+        takeLinks(links, numbers, numberAt, names, nameUsed, numberUsed, placed);
+    }
+
+    private static void takeLinks(List<NameLink> links, List<OcrToken> numbers, List<Integer> numberAt,
+            List<OcrToken> names, boolean[] nameUsed, boolean[] numberUsed, Room[] placed) {
+        links.sort((a, b) -> Double.compare(a.score, b.score));
+        for (int i = 0; i < links.size(); i++) {
+            NameLink link = links.get(i);
+            if (numberUsed[link.number] || nameUsed[link.name]) {
+                continue;
+            }
+            numberUsed[link.number] = true;
+            nameUsed[link.name] = true;
+            OcrToken number = numbers.get(link.number);
+            String numberText = LatinScript.clean(number.text).trim().toUpperCase(Locale.ROOT);
+            String nameText = LatinScript.correctRoomName(LatinScript.clean(names.get(link.name).text).trim());
+            placed[numberAt.get(link.number)] = new Room(numberText, nameText, number.x, number.y, number.confidence);
+        }
+    }
+
+    /** Name on the same line as the number, which is the layout of a one-line example. */
+    private static Double inlineScore(OcrToken number, OcrToken name) {
+        double font = Math.max(number.h, name.h);
+        if (font < 1) {
+            font = 8;
+        }
+        if (Math.abs(number.y - name.y) > font * 0.8) {
+            return null;
+        }
+        double dx = name.x - number.x;
+        if (dx < -font) {
+            return null;
+        }
+        double maxDx = Math.max(48, Math.max(number.w, font) * 4);
+        if (dx > maxDx) {
+            return null;
+        }
+        return Math.abs(dx) + Math.abs(number.y - name.y);
+    }
+
+    private static boolean isVentLabel(String text, OcrToken token) {
+        if (text.matches("\\d+")) {
+            return false;
+        }
+        return LabelParser.parse(text, token.x, token.y, token.confidence) != null;
+    }
+
+    private static boolean hasDigit(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isDigit(text.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final class NameLink {
+        final int number;
+        final int name;
+        final double score;
+
+        NameLink(int number, int name, double score) {
+            this.number = number;
+            this.name = name;
+            this.score = score;
+        }
+    }
+
+    private static List<Room> roomsFromBroadScan(List<OcrToken> tokens) {
         Set<OcrToken> stackedNameTokens = Collections.newSetFromMap(new IdentityHashMap<OcrToken, Boolean>());
         Map<OcrToken, String> stacked = RoomFormats.stackedNames(tokens, stackedNameTokens);
         List<Room> rooms = new ArrayList<Room>();
@@ -57,7 +240,7 @@ public final class ProtocolBuilder {
             name = LatinScript.correctRoomName(name);
             rooms.add(new Room(parts.number, name, token.x, token.y, token.confidence));
         }
-        return mergeCloseRooms(rooms);
+        return rooms;
     }
 
     public static List<Vent> ventsFromTokens(List<OcrToken> tokens) {
@@ -347,6 +530,9 @@ public final class ProtocolBuilder {
         RoomText custom = RoomFormats.parse(raw);
         if (custom != null) {
             return custom;
+        }
+        if (RoomFormats.constrains()) {
+            return RoomFormats.splitJoinedLabel(raw);
         }
         if (raw.length() > 40) {
             return null;
