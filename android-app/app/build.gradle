@@ -4,16 +4,29 @@ plugins {
 
 android {
     namespace "fi.nyja.ventapp"
-    compileSdk 33
+    compileSdk 35
 
     defaultConfig {
         applicationId "fi.nyja.ventapp"
         minSdk 21
-        targetSdk 33
-        versionCode 5
-        versionName "1.5"
-        ndk {
-            abiFilters "armeabi-v7a", "arm64-v8a"
+        targetSdk 35
+        versionCode 20
+        versionName "1.20"
+    }
+
+    flavorDimensions "abi"
+    productFlavors {
+        universal {
+            dimension "abi"
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a"
+            }
+        }
+        arm64 {
+            dimension "abi"
+            ndk {
+                abiFilters "arm64-v8a"
+            }
         }
     }
 
@@ -32,6 +45,10 @@ android {
         debug {
             signingConfig signingConfigs.sideload
         }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.sideload
+        }
     }
 
     packaging {
@@ -44,12 +61,18 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
 }
 
 dependencies {
-    implementation "androidx.core:core:1.9.0"
+    implementation "androidx.core:core:1.15.0"
     implementation "com.microsoft.onnxruntime:onnxruntime-android:1.19.2"
+    implementation "com.tom-roush:pdfbox-android:2.0.27.0"
     testImplementation "junit:junit:4.13.2"
+    testImplementation "com.microsoft.onnxruntime:onnxruntime:1.19.2"
 }
 
 tasks.register("stageTemplate", Copy) {

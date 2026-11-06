@@ -3,6 +3,5 @@
     <dimen name="screen_padding">16dp</dimen>
     <dimen name="button_height">64dp</dimen>
     <dimen name="body_text">18sp</dimen>
-    <dimen name="percent_text">32sp</dimen>
     <dimen name="gap">12dp</dimen>
 </resources>
