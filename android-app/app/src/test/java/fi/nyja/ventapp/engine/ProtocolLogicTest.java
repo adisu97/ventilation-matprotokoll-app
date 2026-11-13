@@ -616,6 +616,148 @@ public class ProtocolLogicTest {
     }
 
     @Test
+    public void stackedExampleAcceptsAnyWordAndSkipsArea() throws Exception {
+        assertFalse(RoomFormats.looksLikeStackedName("KSO"));
+        assertFalse(RoomFormats.looksLikeStackedName("LOCKZONE"));
+        assertFalse(RoomFormats.looksLikeStackedName("EXCA"));
+        assertFalse(RoomFormats.looksLikeStackedName("Ø125"));
+        assertFalse(RoomFormats.looksLikeStackedName("200x100"));
+        assertFalse(RoomFormats.looksLikeStackedName("20 l/s"));
+        assertFalse(RoomFormats.looksLikeStackedName("12,5 m²"));
+        assertFalse(RoomFormats.looksLikeStackedName("m²"));
+        assertTrue(RoomFormats.looksLikeStackedName("Sovrum"));
+        assertTrue(RoomFormats.looksLikeStackedName("Städ"));
+        assertTrue(RoomFormats.looksLikeStackedName("WC2"));
+        assertTrue(RoomFormats.isAreaLabel("12,5 m²"));
+        assertTrue(RoomFormats.isAreaLabel("12.5 m2"));
+        assertTrue(RoomFormats.isAreaLabel("12 m2"));
+        assertTrue(RoomFormats.isAreaLabel("m²"));
+
+        RoomFormats.use(java.util.Collections.singletonList(RoomFormats.derive("15\nrum")));
+        try {
+            assertEquals("Nummer: 15  Namn: Sovrum", RoomFormats.trial("15\nSovrum"));
+            assertEquals("Nummer: 8  Namn: Hall", RoomFormats.trial("8\nHall"));
+            assertEquals("Nummer: 125  Namn: Teknik", RoomFormats.trial("125\nTeknik"));
+            assertEquals("Ingen träff.", RoomFormats.trial("1234\nStäd"));
+            assertEquals("Ingen träff.", RoomFormats.trial("15\nKSO"));
+            assertEquals("Ingen träff.", RoomFormats.trial("15\nØ125"));
+            assertEquals("Kök", RoomFormats.parse("15\nKok").name);
+
+            java.util.List<OcrToken> tokens = new java.util.ArrayList<OcrToken>();
+            tokens.add(new OcrToken("15", 100, 100, 0.95, 24, 16));
+            tokens.add(new OcrToken("m²", 100, 122, 0.9, 20, 12));
+            tokens.add(new OcrToken("Sovrum", 104, 136, 0.95, 56, 16));
+            tokens.add(new OcrToken("12,5", 230, 158, 0.9, 28, 12));
+            tokens.add(new OcrToken("m²", 270, 158, 0.9, 20, 12));
+            tokens.add(new OcrToken("8", 280, 100, 0.95, 16, 16));
+            tokens.add(new OcrToken("Hall", 280, 124, 0.95, 36, 16));
+            tokens.add(new OcrToken("125", 460, 100, 0.95, 28, 16));
+            tokens.add(new OcrToken("Teknik", 470, 124, 0.95, 50, 16));
+            tokens.add(new OcrToken("5", 640, 100, 0.95, 16, 16));
+            tokens.add(new OcrToken("Städ", 640, 124, 0.95, 40, 16));
+            tokens.add(new OcrToken("1234", 820, 100, 0.95, 40, 16));
+            tokens.add(new OcrToken("Förråd", 820, 124, 0.95, 50, 16));
+            tokens.add(new OcrToken("16", 80, 260, 0.95, 20, 16));
+            tokens.add(new OcrToken("KSO", 80, 284, 0.95, 30, 14));
+            tokens.add(new OcrToken("17", 200, 260, 0.95, 20, 16));
+            tokens.add(new OcrToken("Ø125", 200, 284, 0.95, 36, 14));
+            tokens.add(new OcrToken("18", 340, 260, 0.95, 20, 16));
+            tokens.add(new OcrToken("200x100", 340, 284, 0.95, 50, 14));
+            tokens.add(new OcrToken("19", 500, 260, 0.95, 20, 16));
+            tokens.add(new OcrToken("20 l/s", 500, 284, 0.95, 40, 14));
+            tokens.add(new OcrToken("KSO-125", 200, 158, 0.95, 50, 12));
+
+            java.util.List<Room> rooms = ProtocolBuilder.roomsFromTokens(tokens);
+            assertEquals("Sovrum", roomNamed(rooms, "15").name);
+            assertEquals("Hall", roomNamed(rooms, "8").name);
+            assertEquals("Teknik", roomNamed(rooms, "125").name);
+            assertEquals("Städ", roomNamed(rooms, "5").name);
+            assertFalse(hasRoom(rooms, "1234"));
+            assertFalse(hasRoom(rooms, "12"));
+            assertFalse(hasRoom(rooms, "16"));
+            assertFalse(hasRoom(rooms, "17"));
+            assertFalse(hasRoom(rooms, "18"));
+            assertFalse(hasRoom(rooms, "19"));
+            assertEquals(4, rooms.size());
+
+            java.util.List<Vent> vents = ProtocolBuilder.ventsFromTokens(tokens);
+            boolean sizedKso = false;
+            for (Vent vent : vents) {
+                assertFalse("12,5".equals(vent.size));
+                if (vent.airflow != null) {
+                    assertTrue(Math.abs(vent.airflow - 12.5) > 0.05);
+                }
+                if ("kso".equals(vent.canonicalName()) && "125".equals(vent.size)) {
+                    sizedKso = true;
+                    assertNull(vent.airflow);
+                }
+            }
+            assertTrue(sizedKso);
+
+            java.util.List<ProtocolRow> rows = ProtocolBuilder.pair(rooms, java.util.Collections.<Vent>emptyList());
+            File template = new File("../../templates/matprotokoll_grund.xlsx");
+            if (!template.isFile()) {
+                template = new File("../templates/matprotokoll_grund.xlsx");
+            }
+            byte[] xlsx = ProtocolXlsx.build(
+                    java.nio.file.Files.readAllBytes(template.toPath()),
+                    java.util.Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", rows)),
+                    true);
+            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
+            assertTrue(cellWindow(plan, "A2").contains(">15</t>"));
+            assertTrue(cellWindow(plan, "B2").contains(">Sovrum</t>"));
+            assertTrue(plan.contains(">Städ</t>"));
+            assertFalse(plan.contains("m²"));
+            assertFalse(plan.contains(">12,5</t>"));
+        } finally {
+            RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
+        }
+
+        RoomFormats.use(java.util.Collections.singletonList(RoomFormats.derive("E111\nRum")));
+        try {
+            assertEquals("Ingen träff.", RoomFormats.trial("111\nRum"));
+            assertEquals("Ingen träff.", RoomFormats.trial("E11111\nRum"));
+            java.util.List<OcrToken> tokens = new java.util.ArrayList<OcrToken>();
+            tokens.add(new OcrToken("E11", 100, 80, 0.95, 30, 14));
+            tokens.add(new OcrToken("Förråd", 100, 102, 0.95, 50, 14));
+            tokens.add(new OcrToken("12,5 m²", 100, 124, 0.9, 48, 12));
+            tokens.add(new OcrToken("E111", 260, 80, 0.95, 36, 14));
+            tokens.add(new OcrToken("WC2", 260, 102, 0.95, 36, 14));
+            tokens.add(new OcrToken("E1111", 440, 80, 0.95, 42, 14));
+            tokens.add(new OcrToken("Kapprum", 450, 102, 0.95, 60, 14));
+            tokens.add(new OcrToken("111", 640, 80, 0.95, 28, 14));
+            tokens.add(new OcrToken("Rum", 640, 102, 0.95, 30, 14));
+            tokens.add(new OcrToken("E11111", 800, 80, 0.95, 50, 14));
+            tokens.add(new OcrToken("Hall", 800, 102, 0.95, 36, 14));
+            java.util.List<Room> rooms = ProtocolBuilder.roomsFromTokens(tokens);
+            assertEquals("Förråd", roomNamed(rooms, "E11").name);
+            assertEquals("WC2", roomNamed(rooms, "E111").name);
+            assertEquals("Kapprum", roomNamed(rooms, "E1111").name);
+            assertFalse(hasRoom(rooms, "111"));
+            assertFalse(hasRoom(rooms, "E11111"));
+            assertEquals(3, rooms.size());
+            assertTrue(ProtocolBuilder.ventsFromTokens(tokens).isEmpty());
+
+            java.util.List<ProtocolRow> rows = ProtocolBuilder.pair(rooms, java.util.Collections.<Vent>emptyList());
+            File template = new File("../../templates/matprotokoll_grund.xlsx");
+            if (!template.isFile()) {
+                template = new File("../templates/matprotokoll_grund.xlsx");
+            }
+            byte[] xlsx = ProtocolXlsx.build(
+                    java.nio.file.Files.readAllBytes(template.toPath()),
+                    java.util.Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-b", rows)),
+                    true);
+            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
+            assertTrue(cellWindow(plan, "A2").contains(">E11</t>"));
+            assertTrue(cellWindow(plan, "B2").contains(">Förråd</t>"));
+            assertTrue(plan.contains(">WC2</t>"));
+            assertFalse(plan.contains("12,5"));
+        } finally {
+            RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
+        }
+    }
+
+    @Test
     public void parsesExhaustAndSupplyLabels() {
         Vent exhaust = LabelParser.parse("KSO-125 -20", 10, 20, 0.9);
         assertNotNull(exhaust);

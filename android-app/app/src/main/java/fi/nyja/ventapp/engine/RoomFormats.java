@@ -99,6 +99,77 @@ public final class RoomFormats {
     }
 
     /**
+     * Square metres under a room name, for example 12,5 m² or m2. Not a name, number, or vent size.
+     */
+    public static boolean isAreaLabel(String text) {
+        if (text == null) {
+            return false;
+        }
+        String flat = text.trim().replace(" ", "").replace("²", "2").replace("³", "3").replace("^", "");
+        if (flat.isEmpty()) {
+            return false;
+        }
+        return flat.matches("(?i)^(?:\\d{1,4}(?:[.,]\\d{1,2})?)?m2$") || flat.matches("(?i)^kvm$");
+    }
+
+    /** A number or decimal that sits on the same line as m² / m2 / kvm. */
+    public static boolean isAreaPiece(List<OcrToken> tokens, OcrToken token) {
+        if (token == null) {
+            return false;
+        }
+        if (isAreaLabel(token.text)) {
+            return true;
+        }
+        String text = token.text == null ? "" : token.text.trim();
+        if (!text.matches("\\d{1,4}(?:[.,]\\d{1,2})?")) {
+            return false;
+        }
+        if (tokens == null) {
+            return false;
+        }
+        for (int i = 0; i < tokens.size(); i++) {
+            OcrToken other = tokens.get(i);
+            if (other == token || !isAreaLabel(other.text)) {
+                continue;
+            }
+            double font = Math.max(token.h, other.h);
+            if (font < 1) {
+                font = 8;
+            }
+            if (Math.abs(token.y - other.y) <= font * 0.8) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The second line of a two-line example means "a word here", not one fixed room name.
+     * Letters, including å ä ö, with spaces, hyphens, dots, and an optional trailing digit such as WC2.
+     */
+    public static boolean looksLikeStackedName(String text) {
+        if (text == null || LatinScript.hasCjk(text)) {
+            return false;
+        }
+        String raw = text.trim();
+        if (raw.isEmpty() || raw.length() > 40 || isAreaLabel(raw)) {
+            return false;
+        }
+        if (raw.matches("(?i).*(l\\s*/\\s*s|m\\s*3\\s*/\\s*h|m³\\s*/\\s*h).*")) {
+            return false;
+        }
+        String bare = raw.replace("Ø", "").replace("ø", "").replace("Φ", "").replace("⌀", "").replace("∅", "").trim();
+        if (bare.matches("\\d{2,4}") || bare.matches("(?i)\\d{2,4}\\s*[xX×]\\s*\\d{2,4}")
+                || bare.matches("\\d{2,4}\\s*-\\s*\\d{2,4}") || LabelParser.looksLikeDuctSize(bare)) {
+            return false;
+        }
+        if (!raw.matches("[A-ZÅÄÖa-zåäö][A-ZÅÄÖa-zåäö.]*(?:[ -][A-ZÅÄÖa-zåäö][A-ZÅÄÖa-zåäö.]*)*\\d{0,2}")) {
+            return false;
+        }
+        return LabelParser.parse(raw, 0, 0, 1) == null;
+    }
+
+    /**
      * A name from the Swedish, English and Finnish list, or the exact name in a saved example.
      */
     public static boolean acceptedRoomName(String text) {
@@ -151,12 +222,14 @@ public final class RoomFormats {
         }
         String raw = text.trim();
         for (int i = 0; i < active.size(); i++) {
-            Matcher matcher = active.get(i).labelPattern.matcher(raw);
+            Derived derived = active.get(i);
+            Matcher matcher = derived.labelPattern.matcher(raw);
             if (!matcher.matches()) {
                 continue;
             }
             String name = matcher.group(2).trim();
-            if (!acceptedRoomName(name)) {
+            boolean nameOk = derived.stacked ? looksLikeStackedName(name) : acceptedRoomName(name);
+            if (!nameOk) {
                 continue;
             }
             return room(matcher.group(1), name);
@@ -381,7 +454,7 @@ public final class RoomFormats {
     }
 
     private static ProtocolBuilder.RoomText parseStackedLines(String numberLine, String nameLine) {
-        if (!acceptedRoomName(nameLine)) {
+        if (!looksLikeStackedName(nameLine)) {
             return null;
         }
         for (Derived derived : active) {
@@ -412,7 +485,7 @@ public final class RoomFormats {
         return false;
     }
 
-    private static boolean hasStacked() {
+    public static boolean hasStacked() {
         for (Derived derived : active) {
             if (derived.stacked) {
                 return true;

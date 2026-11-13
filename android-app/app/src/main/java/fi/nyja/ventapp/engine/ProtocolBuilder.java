@@ -36,13 +36,15 @@ public final class ProtocolBuilder {
     }
 
     /**
-     * One pass keeps only numbers that match a saved example and known room names.
+     * One pass keeps numbers that match a saved example, and name words under them.
+     * A two-line example accepts any letter-word, not only the room-name list.
      * Pairing then looks only at those two short lists, and only in the example's layout.
      */
     private static List<Room> roomsFromExamples(List<OcrToken> tokens) {
         List<OcrToken> numbers = new ArrayList<OcrToken>();
         List<Integer> numberAt = new ArrayList<Integer>();
         List<OcrToken> names = new ArrayList<OcrToken>();
+        List<OcrToken> inlineNames = new ArrayList<OcrToken>();
         Room[] placed = new Room[tokens == null ? 0 : tokens.size()];
         if (tokens == null) {
             return new ArrayList<Room>();
@@ -50,7 +52,7 @@ public final class ProtocolBuilder {
         for (int i = 0; i < tokens.size(); i++) {
             OcrToken token = tokens.get(i);
             String text = LatinScript.clean(token.text).trim();
-            if (text.isEmpty() || text.length() > 48 || LatinScript.hasCjk(text)) {
+            if (text.isEmpty() || text.length() > 48 || LatinScript.hasCjk(text) || RoomFormats.isAreaPiece(tokens, token)) {
                 continue;
             }
             if (RoomFormats.hasInline()) {
@@ -67,14 +69,32 @@ public final class ProtocolBuilder {
                 numberAt.add(i);
                 continue;
             }
-            if (!hasDigit(text) && RoomFormats.acceptedRoomName(text)) {
+            if (RoomFormats.hasStacked() && RoomFormats.looksLikeStackedName(text)) {
                 names.add(token);
+            }
+            if (!hasDigit(text) && RoomFormats.acceptedRoomName(text)) {
+                inlineNames.add(token);
             }
         }
         boolean[] nameUsed = new boolean[names.size()];
         boolean[] numberUsed = new boolean[numbers.size()];
         assignStacked(numbers, numberAt, names, nameUsed, numberUsed, placed);
-        assignInline(numbers, numberAt, names, nameUsed, numberUsed, placed);
+        List<OcrToken> freeInline = new ArrayList<OcrToken>();
+        for (int i = 0; i < inlineNames.size(); i++) {
+            OcrToken candidate = inlineNames.get(i);
+            boolean used = false;
+            for (int j = 0; j < names.size(); j++) {
+                if (nameUsed[j] && names.get(j) == candidate) {
+                    used = true;
+                    break;
+                }
+            }
+            if (!used) {
+                freeInline.add(candidate);
+            }
+        }
+        boolean[] inlineUsed = new boolean[freeInline.size()];
+        assignInline(numbers, numberAt, freeInline, inlineUsed, numberUsed, placed);
         for (int i = 0; i < numbers.size(); i++) {
             if (numberUsed[i]) {
                 continue;
@@ -248,6 +268,9 @@ public final class ProtocolBuilder {
         List<List<Vent>> parsed = new ArrayList<List<Vent>>();
         List<OcrToken> leftover = new ArrayList<OcrToken>();
         for (OcrToken token : tokens) {
+            if (RoomFormats.isAreaPiece(tokens, token)) {
+                continue;
+            }
             List<Vent> found = LabelParser.parseAll(token.text, token.x, token.y, token.confidence);
             if (found.isEmpty()) {
                 leftover.add(token);
