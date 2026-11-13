@@ -317,11 +317,11 @@ public class ProtocolLogicTest {
                 java.nio.file.Files.readAllBytes(template.toPath()),
                 Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", rows)),
                 true);
-        String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
-        assertTrue(cellWindow(plan, "C2").contains(">exca</t>"));
-        assertTrue(cellWindow(plan, "I2").contains(">lockzone</t>"));
-        assertTrue(cellWindow(plan, "C3").contains(">exca</t>"));
-        assertTrue(cellWindow(plan, "I3").contains(">lockzone</t>"));
+        String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Kokonaisilmamäärät");
+        assertTrue(cellWindow(plan, "B2").contains(">exca</t>"));
+        assertTrue(cellWindow(plan, "H2").contains(">lockzone</t>"));
+        assertTrue(cellWindow(plan, "B3").contains(">exca</t>"));
+        assertTrue(cellWindow(plan, "H3").contains(">lockzone</t>"));
         assertFalse(plan.contains("r=\"A3\""));
     }
 
@@ -441,15 +441,11 @@ public class ProtocolLogicTest {
                     java.nio.file.Files.readAllBytes(template.toPath()),
                     java.util.Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", rows)),
                     true);
-            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
-            assertTrue(cellWindow(plan, "A2").contains(">E111</t>"));
-            assertTrue(cellWindow(plan, "B2").contains(">VINDFÅNG</t>"));
-            assertTrue(cellWindow(plan, "A3").contains(">101</t>"));
-            assertTrue(cellWindow(plan, "B3").contains(">KÖK</t>"));
-            assertTrue(cellWindow(plan, "A4").contains(">A.102</t>"));
-            assertTrue(cellWindow(plan, "B4").contains(">Kontor</t>"));
-            assertTrue(cellWindow(plan, "A5").contains(">E125</t>"));
-            assertTrue(cellWindow(plan, "B5").contains(">WC</t>"));
+            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Kokonaisilmamäärät");
+            assertTrue(cellWindow(plan, "A2").contains(">E111 VINDFÅNG</t>"));
+            assertTrue(cellWindow(plan, "A3").contains(">101 KÖK</t>"));
+            assertTrue(cellWindow(plan, "A4").contains(">A.102 Kontor</t>"));
+            assertTrue(cellWindow(plan, "A5").contains(">E125 WC</t>"));
         } finally {
             RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
         }
@@ -515,11 +511,9 @@ public class ProtocolLogicTest {
                     java.nio.file.Files.readAllBytes(template.toPath()),
                     java.util.Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", rows)),
                     true);
-            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
-            assertTrue(cellWindow(plan, "A2").contains(">5</t>"));
-            assertTrue(cellWindow(plan, "B2").contains(">Kök</t>"));
-            assertTrue(cellWindow(plan, "A4").contains(">125</t>"));
-            assertTrue(cellWindow(plan, "B4").contains(">Keittiö</t>"));
+            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Kokonaisilmamäärät");
+            assertTrue(cellWindow(plan, "A2").contains(">5 Kök</t>"));
+            assertTrue(cellWindow(plan, "A4").contains(">125 Keittiö</t>"));
         } finally {
             RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
         }
@@ -607,7 +601,7 @@ public class ProtocolLogicTest {
                 true);
         String workbook = zipText(xlsx, "xl/workbook.xml");
         assertFalse(workbook.contains("Osäkra"));
-        String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
+        String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Kokonaisilmamäärät");
         assertTrue(plan.contains(">kso</t>"));
         assertTrue(plan.contains(">125</t>"));
         assertTrue(plan.contains(">lockzone</t>"));
@@ -703,10 +697,9 @@ public class ProtocolLogicTest {
                     java.nio.file.Files.readAllBytes(template.toPath()),
                     java.util.Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", rows)),
                     true);
-            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
-            assertTrue(cellWindow(plan, "A2").contains(">15</t>"));
-            assertTrue(cellWindow(plan, "B2").contains(">Sovrum</t>"));
-            assertTrue(plan.contains(">Städ</t>"));
+            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Kokonaisilmamäärät");
+            assertTrue(cellWindow(plan, "A2").contains(">15 Sovrum</t>"));
+            assertTrue(plan.contains(">5 Städ</t>"));
             assertFalse(plan.contains("m²"));
             assertFalse(plan.contains(">12,5</t>"));
         } finally {
@@ -747,14 +740,123 @@ public class ProtocolLogicTest {
                     java.nio.file.Files.readAllBytes(template.toPath()),
                     java.util.Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-b", rows)),
                     true);
-            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
-            assertTrue(cellWindow(plan, "A2").contains(">E11</t>"));
-            assertTrue(cellWindow(plan, "B2").contains(">Förråd</t>"));
-            assertTrue(plan.contains(">WC2</t>"));
-            assertFalse(plan.contains("12,5"));
+            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Kokonaisilmamäärät");
+            assertTrue(cellWindow(plan, "A2").contains(">E11 Förråd</t>"));
+            assertTrue(plan.contains(">E111 WC2</t>"));
+            int dataStart = plan.indexOf("<sheetData>");
+            int dataEnd = plan.indexOf("</sheetData>");
+            assertFalse(plan.substring(dataStart, dataEnd).contains("12,5"));
         } finally {
             RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
         }
+    }
+
+    @Test
+    public void ventExampleReadsNameSizeFlowAndSide() {
+        assertNotNull(VentFormats.derive("Eagle fg 125-ro\n+27"));
+        VentFormats.use("Eagle fg 125-ro\n+27");
+        try {
+            java.util.List<OcrToken> plus = java.util.Arrays.asList(
+                    new OcrToken("Eagle fg 125-ro", 20, 20, 0.95, 90, 12),
+                    new OcrToken("+27", 30, 36, 0.95, 24, 12));
+            Vent eagle = ProtocolBuilder.ventsFromTokens(plus).get(0);
+            assertEquals("eagle", eagle.canonicalName());
+            assertEquals("125", eagle.size);
+            assertEquals(27.0, eagle.airflow, 0.01);
+            assertEquals("supply", eagle.kind);
+            assertTrue(LabelParser.sizeIsClear(eagle.raw, eagle.size));
+
+            java.util.List<OcrToken> minus = java.util.Arrays.asList(
+                    new OcrToken("Eagle fg 125-ro", 20, 20, 0.95, 90, 12),
+                    new OcrToken("-27", 30, 36, 0.95, 24, 12));
+            assertEquals("exhaust", ProtocolBuilder.ventsFromTokens(minus).get(0).kind);
+
+            java.util.List<OcrToken> kso = java.util.Arrays.asList(
+                    new OcrToken("KSO fg 160-c", 20, 80, 0.95, 70, 12),
+                    new OcrToken("-18", 24, 96, 0.95, 24, 12));
+            Vent exhaust = ProtocolBuilder.ventsFromTokens(kso).get(0);
+            assertEquals("kso", exhaust.canonicalName());
+            assertEquals("160", exhaust.size);
+            assertEquals(18.0, exhaust.airflow, 0.01);
+            assertEquals("exhaust", exhaust.kind);
+
+            java.util.List<OcrToken> dykhPlus = java.util.Arrays.asList(
+                    new OcrToken("DYKH fg 200", 20, 140, 0.95, 70, 12),
+                    new OcrToken("+30", 24, 156, 0.95, 24, 12));
+            assertEquals("supply", ProtocolBuilder.ventsFromTokens(dykhPlus).get(0).kind);
+            java.util.List<OcrToken> dykhMinus = java.util.Arrays.asList(
+                    new OcrToken("DYKH fg 200", 20, 140, 0.95, 70, 12),
+                    new OcrToken("-30", 24, 156, 0.95, 24, 12));
+            assertEquals("exhaust", ProtocolBuilder.ventsFromTokens(dykhMinus).get(0).kind);
+
+            java.util.List<OcrToken> doubled = java.util.Arrays.asList(
+                    new OcrToken("2xEagle fg 125-ro", 20, 200, 0.95, 100, 12),
+                    new OcrToken("+27", 30, 216, 0.95, 24, 12));
+            Vent two = ProtocolBuilder.ventsFromTokens(doubled).get(0);
+            assertEquals(2, two.qty);
+            java.util.List<ProtocolRow> rows = ProtocolBuilder.pair(
+                    java.util.Collections.singletonList(new Room("E116", "Trappa", 20, 200, 1)),
+                    java.util.Collections.singletonList(two));
+            assertEquals(2, rows.size());
+            assertEquals("E116 Trappa", rows.get(0).room);
+            assertEquals("", rows.get(1).room);
+            assertEquals("eagle", rows.get(0).supplyName);
+            assertEquals("eagle", rows.get(1).supplyName);
+            assertEquals(27.0, rows.get(0).supplyBehov + rows.get(1).supplyBehov, 0.01);
+        } finally {
+            VentFormats.use("");
+        }
+    }
+
+    @Test
+    public void roomExampleWithAreaWritesOneCell() throws Exception {
+        assertNotNull(RoomFormats.derive("E116\nTrappa\n26,7 m^3"));
+        assertTrue(RoomFormats.isAreaLabel("26,7 m^3"));
+        assertTrue(RoomFormats.isAreaLabel("26,7 m^2"));
+        assertTrue(RoomFormats.isAreaLabel("12 m2"));
+        RoomFormats.use(java.util.Collections.singletonList(RoomFormats.derive("E116\nTrappa\n26,7 m^3")));
+        try {
+            java.util.List<OcrToken> tokens = java.util.Arrays.asList(
+                    new OcrToken("E116", 40, 40, 0.98, 36, 14),
+                    new OcrToken("Trappa", 48, 60, 0.98, 50, 14),
+                    new OcrToken("26,7 m^3", 44, 82, 0.9, 48, 12));
+            java.util.List<Room> rooms = ProtocolBuilder.roomsFromTokens(tokens);
+            assertEquals(1, rooms.size());
+            assertEquals("E116", rooms.get(0).number);
+            assertEquals("Trappa", rooms.get(0).name);
+            assertTrue(ProtocolBuilder.ventsFromTokens(tokens).isEmpty());
+            java.util.List<ProtocolRow> rows = ProtocolBuilder.pair(rooms, java.util.Collections.<Vent>emptyList());
+            File template = new File("../../templates/matprotokoll_grund.xlsx");
+            if (!template.isFile()) {
+                template = new File("../templates/matprotokoll_grund.xlsx");
+            }
+            byte[] xlsx = ProtocolXlsx.build(
+                    java.nio.file.Files.readAllBytes(template.toPath()),
+                    java.util.Collections.singletonList(new ProtocolXlsx.DrawingSheet("plan-a", rows)),
+                    true);
+            String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Kokonaisilmamäärät");
+            assertTrue(cellWindow(plan, "A2").contains(">E116 Trappa</t>"));
+            assertFalse(plan.contains("26,7"));
+            assertFalse(plan.contains("Rumsnamn"));
+        } finally {
+            RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
+        }
+    }
+
+    @Test
+    public void startAsksForRoomFormatThenVentFormat() throws Exception {
+        assertEquals("room", fi.nyja.ventapp.ReadSetup.promptOrder().get(0));
+        assertEquals("vent", fi.nyja.ventapp.ReadSetup.promptOrder().get(1));
+        String layout = new String(java.nio.file.Files.readAllBytes(
+                java.nio.file.Paths.get("src/main/res/layout/activity_read_setup.xml")), StandardCharsets.UTF_8);
+        assertTrue(layout.contains("@+id/roomExample"));
+        assertTrue(layout.contains("@+id/ventExample"));
+        String main = new String(java.nio.file.Files.readAllBytes(
+                java.nio.file.Paths.get("src/main/java/fi/nyja/ventapp/MainActivity.java")), StandardCharsets.UTF_8);
+        int ask = main.indexOf("ReadSetupActivity");
+        int extract = main.indexOf("void beginExtraction");
+        assertTrue(ask > 0 && ask < extract);
+        assertTrue(main.contains("REQ_SETUP"));
     }
 
     @Test
@@ -882,46 +984,42 @@ public class ProtocolLogicTest {
         assertTrue(workbook.contains("plan-a"));
         assertFalse(workbook.contains("Osäkra"));
         assertFalse(workbook.contains("name=\"Sheet1\""));
-        String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Rumsnummer");
-        assertTrue(plan.contains("Rumsnamn"));
+        String plan = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Kokonaisilmamäärät");
+        assertFalse(plan.contains("Rumsnamn"));
         assertTrue(plan.contains("Frånluftsdon"));
-        assertTrue(plan.contains("<c r=\"A2\""));
-        assertTrue(plan.contains(">E125</t>"));
+        assertTrue(plan.contains(">E125 WC</t>"));
         assertTrue(plan.contains("<c r=\"B2\""));
-        assertTrue(plan.contains(">WC</t>"));
-        assertTrue(plan.contains("<c r=\"C2\""));
         assertTrue(plan.contains(">kso</t>"));
-        assertTrue(plan.contains("<c r=\"I2\""));
+        assertTrue(plan.contains("<c r=\"H2\""));
         assertTrue(plan.contains(">kts</t>"));
         assertFalse(plan.contains("r=\"A3\""));
-        assertFalse(plan.contains("r=\"B3\""));
-        assertTrue(plan.contains("<c r=\"C3\""));
-        assertTrue(plan.contains(">AULA</t>"));
+        assertTrue(plan.contains("<c r=\"B3\""));
+        assertTrue(plan.contains(">E102 AULA</t>"));
         assertTrue(plan.contains("Kokonaisilmamäärät/Totalt"));
-        assertTrue(plan.contains("SUM(E2:E4)"));
+        assertTrue(plan.contains("SUM(D2:D4)"));
+        assertTrue(plan.contains("SUM(J2:J4)"));
         assertTrue(plan.contains("<v>35</v>"));
         assertTrue(plan.contains("<v>20</v>"));
         assertTrue(plan.contains("<v>0</v>"));
         String styles = zipText(xlsx, "xl/styles.xml");
-        String yellow = fillOf(styles, styleOf(plan, "C1"));
-        String red = fillOf(styles, styleOf(plan, "I1"));
+        String yellow = fillOf(styles, styleOf(plan, "B1"));
+        String red = fillOf(styles, styleOf(plan, "H1"));
         assertEquals("FFFFFFCC", yellow);
         assertEquals("FFFFD9D9", red);
         int totalRow = Integer.parseInt(plan.replaceAll("(?s).*r=\"A(\\d+)\"[^>]*>.*?Kokonais.*", "$1"));
         for (int row = 2; row <= totalRow; row++) {
-            for (char col = 'C'; col <= 'H'; col++) {
+            for (char col = 'B'; col <= 'G'; col++) {
                 String ref = col + Integer.toString(row);
                 assertTrue(plan.contains("r=\"" + ref + "\""));
                 assertEquals(ref, yellow, fillOf(styles, styleOf(plan, ref)));
             }
-            for (char col = 'I'; col <= 'N'; col++) {
+            for (char col = 'H'; col <= 'M'; col++) {
                 String ref = col + Integer.toString(row);
                 assertTrue(plan.contains("r=\"" + ref + "\""));
                 assertEquals(ref, red, fillOf(styles, styleOf(plan, ref)));
             }
         }
         assertFalse(plan.contains("r=\"A3\""));
-        assertFalse(plan.contains("r=\"B3\""));
         String workbookXml = zipText(xlsx, "xl/workbook.xml");
         assertTrue(workbookXml.contains("fullCalcOnLoad=\"1\""));
         String cover = zipEntryContaining(xlsx, "xl/worksheets/sheet", "Yhteensä Totalt");
@@ -1048,15 +1146,19 @@ public class ProtocolLogicTest {
     private static String zipEntryContaining(byte[] zip, String prefix, String marker) throws Exception {
         ZipInputStream in = new ZipInputStream(new java.io.ByteArrayInputStream(zip));
         ZipEntry entry;
+        String found = null;
         while ((entry = in.getNextEntry()) != null) {
             if (entry.getName().startsWith(prefix)) {
                 String text = new String(read(in), StandardCharsets.UTF_8);
                 if (text.contains(marker)) {
-                    return text;
+                    found = text;
                 }
             }
         }
-        throw new IllegalStateException(marker);
+        if (found == null) {
+            throw new IllegalStateException(marker);
+        }
+        return found;
     }
 
     private static String zipTextMatching(byte[] zip, String prefix) throws Exception {

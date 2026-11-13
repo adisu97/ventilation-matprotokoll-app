@@ -59,6 +59,7 @@ public final class DrawingExtractor {
             throws Exception {
         VentNameStore.load(context);
         RoomFormatStore.load(context);
+        VentFormatStore.load(context);
         byte[] base = existingUri == null ? readAsset(context, "matprotokoll_grund.xlsx") : readUri(context, Uri.parse(existingUri));
         boolean fromTemplate = existingUri == null;
         PpOcr ocr = openOcr(context);

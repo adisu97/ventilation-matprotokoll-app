@@ -14,6 +14,14 @@
     <string name="room_example_exists">Exemplet finns redan.</string>
     <string name="room_format_test">Test</string>
     <string name="room_trial_hint">Skriv en eller två rader och se om de matchas</string>
+    <string name="read_setup_room_title">Rumsformat</string>
+    <string name="read_setup_room_help">Skriv ett exempel innan avläsningen. Två rader är numret ovanför namnet. En yta under, till exempel 26,7 m², hoppas över. Lämna tomt om ritningen inte har ett fast format.</string>
+    <string name="read_setup_vent_title">Donformat</string>
+    <string name="read_setup_vent_help">Skriv ett exempel på donets text. Plus betyder tilluft och minus frånluft. Storleken är siffran, och ord som fg eller -ro hoppas över.</string>
+    <string name="read_setup_next">Nästa</string>
+    <string name="read_setup_start">Starta avläsning</string>
+    <string name="vent_example_hint">Eagle fg 125-ro\n+27</string>
+    <string name="vent_example_invalid">Skriv donets namn, storlek och ett tecken, till exempel +27 eller -27.</string>
     <string name="size_review_title">Storlek</string>
     <string name="size_review_help">Appen hittade de här donen men är inte säker på storleken. Skriv storleken om raden ska med i protokollet. Lämna tomt för att hoppa över.</string>
     <string name="size_hint">Storlek, t.ex. 250</string>

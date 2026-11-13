@@ -109,9 +109,8 @@ public final class ProtocolXlsx {
     }
 
     private static String sheetXml(String prototype, String name, List<ProtocolRow> rows) {
-        String prepared = prototype == null ? null : addNameColumn(prototype);
-        String header = headerRow(prepared);
-        String styles = withNameStyle(dataStyles(prototype));
+        String header = headerRow(prototype);
+        String styles = dataStyles(prototype);
         StringBuilder data = new StringBuilder();
         int r = 2;
         for (ProtocolRow row : rows) {
@@ -123,63 +122,15 @@ public final class ProtocolXlsx {
         data.append(bandRow(total - 1, styles));
         data.append(totalRow(total, 2, dataLast, styles, sumBehov(rows, true), sumBehov(rows, false)));
         String sheetData = "<sheetData>" + header + data + "</sheetData>";
-        if (prepared != null && prepared.contains("<sheetData>") && prepared.contains("</sheetData>")) {
-            int start = prepared.indexOf("<sheetData>");
-            int end = prepared.indexOf("</sheetData>") + "</sheetData>".length();
-            String prefix = prepared.substring(0, start);
-            String suffix = prepared.substring(end);
-            prefix = prefix.replaceFirst("dimension ref=\"[^\"]*\"", "dimension ref=\"A1:N" + total + "\"");
+        if (prototype != null && prototype.contains("<sheetData>") && prototype.contains("</sheetData>")) {
+            int start = prototype.indexOf("<sheetData>");
+            int end = prototype.indexOf("</sheetData>") + "</sheetData>".length();
+            String prefix = prototype.substring(0, start);
+            String suffix = prototype.substring(end);
+            prefix = prefix.replaceFirst("dimension ref=\"[^\"]*\"", "dimension ref=\"A1:M" + total + "\"");
             return prefix + sheetData + suffix;
         }
         return fallbackSheet(sheetData, total);
-    }
-
-    /** Grund has one Utrymme column. The written sheet adds Rumsnamn and shifts the don columns. */
-    private static String addNameColumn(String xml) {
-        if (xml.contains("Rumsnamn")) {
-            return xml;
-        }
-        String shifted = xml;
-        for (int n = 40; n >= 2; n--) {
-            shifted = shifted.replace("min=\"" + n + "\"", "min=\"#" + (n + 1) + "\"");
-            shifted = shifted.replace("max=\"" + n + "\"", "max=\"#" + (n + 1) + "\"");
-        }
-        shifted = shifted.replace("#", "");
-        int colEnd = shifted.indexOf("min=\"1\" max=\"1\" />");
-        if (colEnd >= 0) {
-            colEnd += "min=\"1\" max=\"1\" />".length();
-            String nameWidth = "<col width=\"18\" bestFit=\"1\" customWidth=\"1\" style=\"75\" min=\"2\" max=\"2\" />";
-            shifted = shifted.substring(0, colEnd) + nameWidth + shifted.substring(colEnd);
-        }
-        int start = shifted.indexOf("<row r=\"1\"");
-        int end = start < 0 ? -1 : shifted.indexOf("</row>", start);
-        if (start < 0 || end < 0) {
-            return shifted;
-        }
-        String row = shifted.substring(start, end);
-        for (int col = 20; col >= 2; col--) {
-            row = row.replace("r=\"" + cellRef(col, 1) + "\"", "r=\"" + cellRef(col + 1, 1) + "\"");
-        }
-        row = row.replaceFirst("(?s)<t[^>]*>.*?</t>", "<t>Rumsnummer\nHuonenro</t>");
-        int close = row.indexOf("</c>");
-        if (close >= 0) {
-            String nameCell = "<c r=\"B1\" s=\"18\" t=\"inlineStr\"><is><t>Rumsnamn\nUtrymme</t></is></c>";
-            row = row.substring(0, close + 4) + nameCell + row.substring(close + 4);
-        }
-        return shifted.substring(0, start) + row + shifted.substring(end);
-    }
-
-    private static String withNameStyle(String styles) {
-        String[] parts = styles.split(",");
-        if (parts.length == 0) {
-            return styles;
-        }
-        StringBuilder out = new StringBuilder();
-        out.append(parts[0]).append(',').append(parts[0]);
-        for (int i = 1; i < parts.length; i++) {
-            out.append(',').append(parts[i]);
-        }
-        return out.toString();
     }
 
     private static String headerRow(String prototype) {
@@ -234,29 +185,23 @@ public final class ProtocolXlsx {
         String[] style = styles.split(",");
         StringBuilder xml = new StringBuilder();
         xml.append("<row r=\"").append(row).append("\">");
-        ProtocolBuilder.RoomText room = ProtocolBuilder.splitRoom(data.room);
-        if (room == null) {
-            cell(xml, 1, row, data.room, style);
-        } else {
-            cell(xml, 1, row, room.number, style);
-            cell(xml, 2, row, room.name, style);
-        }
+        cell(xml, 1, row, data.room, style);
         if (!data.exhaustName.isEmpty()) {
-            cell(xml, 3, row, data.exhaustName, style);
-            valueOrBand(xml, 4, row, data.exhaustSize, style);
-            valueOrBand(xml, 5, row, num(data.exhaustBehov), style, true);
+            cell(xml, 2, row, data.exhaustName, style);
+            valueOrBand(xml, 3, row, data.exhaustSize, style);
+            valueOrBand(xml, 4, row, num(data.exhaustBehov), style, true);
         } else {
-            band(xml, row, style, 3, 5);
+            band(xml, row, style, 2, 4);
         }
-        band(xml, row, style, 6, 8);
+        band(xml, row, style, 5, 7);
         if (!data.supplyName.isEmpty()) {
-            cell(xml, 9, row, data.supplyName, style);
-            valueOrBand(xml, 10, row, data.supplySize, style);
-            valueOrBand(xml, 11, row, num(data.supplyBehov), style, true);
+            cell(xml, 8, row, data.supplyName, style);
+            valueOrBand(xml, 9, row, data.supplySize, style);
+            valueOrBand(xml, 10, row, num(data.supplyBehov), style, true);
         } else {
-            band(xml, row, style, 9, 11);
+            band(xml, row, style, 8, 10);
         }
-        band(xml, row, style, 12, 14);
+        band(xml, row, style, 11, 13);
         xml.append("</row>");
         return xml.toString();
     }
@@ -266,7 +211,7 @@ public final class ProtocolXlsx {
         String[] style = styles.split(",");
         StringBuilder xml = new StringBuilder();
         xml.append("<row r=\"").append(row).append("\">");
-        band(xml, row, style, 3, 14);
+        band(xml, row, style, 2, 13);
         xml.append("</row>");
         return xml.toString();
     }
@@ -276,13 +221,13 @@ public final class ProtocolXlsx {
         StringBuilder xml = new StringBuilder();
         xml.append("<row r=\"").append(row).append("\">");
         cell(xml, 1, row, "Kokonaisilmamäärät/Totalt", style);
-        band(xml, row, style, 3, 4);
-        formula(xml, 5, row, "SUM(E" + from + ":E" + to + ")", style, exhaustBehov);
-        formula(xml, 6, row, "SUM(F" + from + ":F" + to + ")", style, 0);
-        band(xml, row, style, 7, 10);
-        formula(xml, 11, row, "SUM(K" + from + ":K" + to + ")", style, supplyBehov);
-        formula(xml, 12, row, "SUM(L" + from + ":L" + to + ")", style, 0);
-        band(xml, row, style, 13, 14);
+        band(xml, row, style, 2, 3);
+        formula(xml, 4, row, "SUM(D" + from + ":D" + to + ")", style, exhaustBehov);
+        formula(xml, 5, row, "SUM(E" + from + ":E" + to + ")", style, 0);
+        band(xml, row, style, 6, 9);
+        formula(xml, 10, row, "SUM(J" + from + ":J" + to + ")", style, supplyBehov);
+        formula(xml, 11, row, "SUM(K" + from + ":K" + to + ")", style, 0);
+        band(xml, row, style, 12, 13);
         xml.append("</row>");
         return xml.toString();
     }
@@ -478,31 +423,6 @@ public final class ProtocolXlsx {
         return n;
     }
 
-    private static String unsureXml(List<ProtocolRow> rows, List<String> sources) {
-        StringBuilder data = new StringBuilder();
-        data.append("<row r=\"1\">");
-        plain(data, 1, 1, "Källa");
-        plain(data, 2, 1, "Utrymme");
-        plain(data, 3, 1, "Frånluft");
-        plain(data, 4, 1, "Tilluft");
-        plain(data, 5, 1, "Konfidens");
-        plain(data, 6, 1, "Orsak");
-        data.append("</row>");
-        for (int i = 0; i < rows.size(); i++) {
-            ProtocolRow row = rows.get(i);
-            int r = i + 2;
-            data.append("<row r=\"").append(r).append("\">");
-            plain(data, 1, r, sources.get(i));
-            plain(data, 2, r, row.room);
-            plain(data, 3, r, row.exhaustName);
-            plain(data, 4, r, row.supplyName);
-            plain(data, 5, r, String.format(Locale.US, "%.2f", row.confidence));
-            plain(data, 6, r, row.unsureReason);
-            data.append("</row>");
-        }
-        return fallbackSheet("<sheetData>" + data + "</sheetData>", rows.size() + 1);
-    }
-
     private static void plain(StringBuilder xml, int col, int row, String value) {
         xml.append("<c r=\"").append(cellRef(col, row))
                 .append("\" t=\"inlineStr\"><is><t xml:space=\"preserve\">")
@@ -511,7 +431,7 @@ public final class ProtocolXlsx {
 
     private static String fallbackHeader() {
         String[] headers = {
-                "Rumsnummer\nHuonenro", "Rumsnamn\nUtrymme", "Poistoilmaelin Frånluftsdon", "Koko Storlek",
+                "Huonetila\nUtrymme", "Poistoilmaelin Frånluftsdon", "Koko Storlek",
                 "Tarve Behov (l/s)", "Mitattu Uppmätt (l/s)", "Paine Tryck (Pa)", "Asento Justering",
                 "Tuloilmaelin Tilluftsdon", "Koko Storlek", "Tarve Behov (l/s)",
                 "Mitattu Uppmätt (l/s)", "Paine Tryck (Pa)", "Asento Justering"
@@ -527,7 +447,7 @@ public final class ProtocolXlsx {
     private static String fallbackSheet(String sheetData, int lastRow) {
         return "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
                 + "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
-                + "<dimension ref=\"A1:N" + lastRow + "\"/>"
+                + "<dimension ref=\"A1:M" + lastRow + "\"/>"
                 + sheetData
                 + "<pageSetup orientation=\"landscape\" fitToWidth=\"1\" fitToHeight=\"0\"/>"
                 + "</worksheet>";

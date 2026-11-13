@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
     private static final int REQ_WORKBOOK = 4;
     private static final int REQ_NOTIFICATIONS = 8;
     private static final int REQ_SIZES = 9;
+    private static final int REQ_SETUP = 10;
     private static final long PER_FILE_MS = 1000L;
     private static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -377,6 +378,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_SETUP) {
+            if (resultCode == RESULT_OK) {
+                beginExtraction();
+            } else {
+                refreshStartState();
+            }
+            return;
+        }
         if (requestCode == REQ_SIZES) {
             sizeReviewShown = false;
             applyJob();
@@ -418,7 +427,7 @@ public class MainActivity extends Activity {
             if (grantResults.length == 0 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
                 Toast.makeText(this, R.string.notifications_denied, Toast.LENGTH_LONG).show();
             }
-            beginExtraction();
+            askFormats();
             return;
         }
         if (requestCode != REQ_CAMERA_PERMISSION) {
@@ -590,7 +599,11 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFICATIONS);
             return;
         }
-        beginExtraction();
+        askFormats();
+    }
+
+    private void askFormats() {
+        startActivityForResult(new Intent(this, ReadSetupActivity.class), REQ_SETUP);
     }
 
     private void beginExtraction() {

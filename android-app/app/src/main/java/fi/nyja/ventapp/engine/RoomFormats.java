@@ -109,7 +109,7 @@ public final class RoomFormats {
         if (flat.isEmpty()) {
             return false;
         }
-        return flat.matches("(?i)^(?:\\d{1,4}(?:[.,]\\d{1,2})?)?m2$") || flat.matches("(?i)^kvm$");
+        return flat.matches("(?i)^(?:\\d{1,4}(?:[.,]\\d{1,2})?)?m[23]$") || flat.matches("(?i)^kvm$");
     }
 
     /** A number or decimal that sits on the same line as m² / m2 / kvm. */
@@ -289,8 +289,14 @@ public final class RoomFormats {
 
     public static Derived derive(String example) {
         List<String> lines = contentLines(example);
-        if (lines.isEmpty() || lines.size() > 2) {
+        if (lines.isEmpty() || lines.size() > 3) {
             return null;
+        }
+        if (lines.size() == 3) {
+            if (!isAreaLabel(lines.get(2))) {
+                return null;
+            }
+            lines = lines.subList(0, 2);
         }
         if (lines.size() == 2) {
             return deriveStacked(lines.get(0), lines.get(1));

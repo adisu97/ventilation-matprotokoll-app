@@ -152,6 +152,9 @@ public final class LabelParser {
     }
 
     public static String classify(String name, Double airflow, boolean signed) {
+        if (VentFormats.signOverrides() && signed && airflow != null && airflow.doubleValue() != 0) {
+            return airflow.doubleValue() < 0 ? "exhaust" : "supply";
+        }
         return catalog.classify(name, airflow, signed);
     }
 
@@ -207,6 +210,9 @@ public final class LabelParser {
         }
         if (ranges > 1) {
             return false;
+        }
+        if (VentFormats.active() && size.trim().matches("\\d+")) {
+            return true;
         }
         String letters = norm;
         VentCatalog names = current();

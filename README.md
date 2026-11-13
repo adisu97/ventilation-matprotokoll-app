@@ -56,11 +56,11 @@ python -m matprotokoll.webapp
 
 ## Android-app (APK, på telefonen)
 
-Mindre APK för 64-bitarstelefoner, till exempel Galaxy A52: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-18/ventapp-arm64.apk
+Mindre APK för 64-bitarstelefoner, till exempel Galaxy A52: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-19/ventapp-arm64.apk
 
-APK med både 32- och 64-bitars: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-18/ventapp.apk
+APK med både 32- och 64-bitars: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-19/ventapp.apk
 
-Paket-id är `fi.nyja.ventapp`, version 1.21 (versionCode 21, targetSdk 35) för båda filerna, samma nyckel. Android-bladet skriver rumsnummer i kolumn A och rumsnamn i kolumn B. Donen börjar i kolumn C. Fler don i samma rum lämnar båda rumscellerna tomma. Överst på skärmen står versionsnumret. Knappen Ventilnamn visar donen som avläsningen söker efter. Varje ritning har ett öga som visar filen. Om appen kraschar vid start visas en felskärm med knappen Kopiera, och texten sparas som `ventapp-crashlog.txt` i Nedladdningar. **Avinstallera den gamla appen en gång** om telefonen har en test-APK äldre än versionCode 5. Från versionCode 5 kan version 21 installeras ovanpå. Knappen Rumsformat begränsar rumsökningen till exemplen. Två rader betyder nummer ovanför ett ord, och en yta i m² under namnet hoppas över. Don med oklar storlek frågas innan de skrivs in. Visa avläst text sparar ventapp-ocr.txt i Nedladdningar.
+Paket-id är `fi.nyja.ventapp`, version 1.22 (versionCode 22, targetSdk 35) för båda filerna, samma nyckel. Android-bladet skriver rumsnummer och rumsnamn i samma cell, till exempel E116 Trappa. Frånluft börjar i kolumn B och tilluft i kolumn H. Fler don i samma rum lämnar rumscellen tom. Överst på skärmen står versionsnumret. Starta frågar efter rumsformat och donformat, med förra exemplet ifyllt. Knappen Ventilnamn visar donen som avläsningen söker efter. Varje ritning har ett öga som visar filen. Om appen kraschar vid start visas en felskärm med knappen Kopiera, och texten sparas som `ventapp-crashlog.txt` i Nedladdningar. **Avinstallera den gamla appen en gång** om telefonen har en test-APK äldre än versionCode 5. Från versionCode 5 kan version 22 installeras ovanpå. Don med oklar storlek frågas innan de skrivs in. Visa avläst text sparar ventapp-ocr.txt i Nedladdningar.
 
 Om nedladdningen avbryts, prova först de här slumpfilerna (ingen app, bara data) för att se vilken storlek telefonen klarar: [5 MiB](https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-5mb.bin), [10 MiB](https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-10mb.bin), [20 MiB](https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-20mb.bin).
 
