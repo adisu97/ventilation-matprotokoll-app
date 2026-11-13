@@ -56,9 +56,13 @@ python -m matprotokoll.webapp
 
 ## Android-app (APK, på telefonen)
 
-Debug-signerad sideload-APK: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-2/ventapp.apk
+Mindre APK för 64-bitarstelefoner, till exempel Galaxy A52: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-19/ventapp-arm64.apk
 
-Paket-id är `fi.nyja.ventapp`. **Avinstallera den gamla appen en gång** om telefonen redan har en tidigare test-APK. De byggdes med en ny debug-nyckel vid varje CI-körning, så Android säger "App was not installed" vid uppdatering. Från versionCode 5 används samma nyckel varje gång, och senare APK:er kan installeras ovanpå varandra.
+APK med både 32- och 64-bitars: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-19/ventapp.apk
+
+Paket-id är `fi.nyja.ventapp`, version 1.22 (versionCode 22, targetSdk 35) för båda filerna, samma nyckel. Android-bladet skriver rumsnummer och rumsnamn i samma cell, till exempel E116 Trappa. Frånluft börjar i kolumn B och tilluft i kolumn H. Fler don i samma rum lämnar rumscellen tom. Överst på skärmen står versionsnumret. Starta frågar efter rumsformat och donformat, med förra exemplet ifyllt. Knappen Ventilnamn visar donen som avläsningen söker efter. Varje ritning har ett öga som visar filen. Om appen kraschar vid start visas en felskärm med knappen Kopiera, och texten sparas som `ventapp-crashlog.txt` i Nedladdningar. **Avinstallera den gamla appen en gång** om telefonen har en test-APK äldre än versionCode 5. Från versionCode 5 kan version 22 installeras ovanpå. Don med oklar storlek frågas innan de skrivs in. Visa avläst text sparar ventapp-ocr.txt i Nedladdningar.
+
+Om nedladdningen avbryts, prova först de här slumpfilerna (ingen app, bara data) för att se vilken storlek telefonen klarar: [5 MiB](https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-5mb.bin), [10 MiB](https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-10mb.bin), [20 MiB](https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-20mb.bin).
 
 Nyckeln `android-app/signing/ventapp-sideload.keystore` är en **publik engångsnyckel** med lösenordet `ventapp-sideload` i repot. Den finns bara så att sideload-uppdateringar har samma signatur (v1 för Android 5–6 och v2). Den är inte en produktionsnyckel och ska inte användas till något annat.
 
