@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/settingsRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/page_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/screen_padding">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_title"
+            android:textColor="@color/text_primary"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/gap"
+            android:text="@string/language"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/body_text"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/languageGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <RadioButton
+                android:id="@+id/languageSv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="@dimen/button_height"
+                android:text="@string/language_sv"
+                android:textSize="@dimen/body_text" />
+
+            <RadioButton
+                android:id="@+id/languageFi"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="@dimen/button_height"
+                android:text="@string/language_fi"
+                android:textSize="@dimen/body_text" />
+        </RadioGroup>
+
+        <Button
+            android:id="@+id/resetAll"
+            style="@style/SecondaryButton"
+            android:layout_marginTop="@dimen/gap"
+            android:text="@string/reset_all" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/gap"
+            android:text="@string/learned_rules"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/body_text"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/rulesEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/learned_empty"
+            android:textColor="@color/text_secondary"
+            android:textSize="@dimen/body_text" />
+
+        <LinearLayout
+            android:id="@+id/rulesList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </LinearLayout>
+</ScrollView>

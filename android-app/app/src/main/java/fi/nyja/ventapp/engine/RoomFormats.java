@@ -344,6 +344,35 @@ public final class RoomFormats {
      * PDF text-layer words and OCR boxes both use the token centre and width/height.
      * Consumed name tokens are added to {@code consumedNames}.
      */
+    /** Name under or above a number, using the same gap as a two-line label. No saved format is required. */
+    public static String nameUnderOrAbove(List<OcrToken> tokens, OcrToken number, Set<OcrToken> skip) {
+        if (tokens == null || number == null) {
+            return "";
+        }
+        String best = "";
+        double bestScore = Double.MAX_VALUE;
+        for (int i = 0; i < tokens.size(); i++) {
+            OcrToken name = tokens.get(i);
+            if (name == number || (skip != null && skip.contains(name))) {
+                continue;
+            }
+            if (isAreaPiece(tokens, name)) {
+                continue;
+            }
+            String text = LatinScript.clean(name.text).trim();
+            if (!looksLikeStackedName(text) && !looksLikeStackedName(LatinScript.correctRoomName(text))) {
+                continue;
+            }
+            Double score = placementScore(number, name);
+            if (score == null || score >= bestScore) {
+                continue;
+            }
+            bestScore = score;
+            best = LatinScript.correctRoomName(text);
+        }
+        return best;
+    }
+
     public static Map<OcrToken, String> stackedNames(List<OcrToken> tokens, Set<OcrToken> consumedNames) {
         Map<OcrToken, String> out = new IdentityHashMap<OcrToken, String>();
         if (consumedNames != null) {

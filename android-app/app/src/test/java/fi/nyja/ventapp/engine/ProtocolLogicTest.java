@@ -844,19 +844,24 @@ public class ProtocolLogicTest {
     }
 
     @Test
-    public void startAsksForRoomFormatThenVentFormat() throws Exception {
-        assertEquals("room", fi.nyja.ventapp.ReadSetup.promptOrder().get(0));
-        assertEquals("vent", fi.nyja.ventapp.ReadSetup.promptOrder().get(1));
+    public void startAsksForVentFormatOnly() throws Exception {
+        assertEquals(1, fi.nyja.ventapp.ReadSetup.promptOrder().size());
+        assertEquals("vent", fi.nyja.ventapp.ReadSetup.promptOrder().get(0));
         String layout = new String(java.nio.file.Files.readAllBytes(
                 java.nio.file.Paths.get("src/main/res/layout/activity_read_setup.xml")), StandardCharsets.UTF_8);
-        assertTrue(layout.contains("@+id/roomExample"));
+        assertFalse(layout.contains("@+id/roomExample"));
         assertTrue(layout.contains("@+id/ventExample"));
         String main = new String(java.nio.file.Files.readAllBytes(
                 java.nio.file.Paths.get("src/main/java/fi/nyja/ventapp/MainActivity.java")), StandardCharsets.UTF_8);
+        assertFalse(main.contains("takePhoto"));
+        assertFalse(main.contains("RoomFormatsActivity"));
         int ask = main.indexOf("ReadSetupActivity");
         int extract = main.indexOf("void beginExtraction");
         assertTrue(ask > 0 && ask < extract);
         assertTrue(main.contains("REQ_SETUP"));
+        String manifest = new String(java.nio.file.Files.readAllBytes(
+                java.nio.file.Paths.get("src/main/AndroidManifest.xml")), StandardCharsets.UTF_8);
+        assertFalse(manifest.contains("android.permission.CAMERA"));
     }
 
     @Test

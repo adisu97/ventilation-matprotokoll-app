@@ -21,6 +21,7 @@ import fi.nyja.ventapp.engine.TokenCleanup;
 import fi.nyja.ventapp.engine.ProtocolRow;
 import fi.nyja.ventapp.engine.ProtocolXlsx;
 import fi.nyja.ventapp.engine.Room;
+import fi.nyja.ventapp.engine.RoomFormats;
 import fi.nyja.ventapp.engine.SheetNames;
 import fi.nyja.ventapp.engine.Vent;
 import fi.nyja.ventapp.ocr.PpOcr;
@@ -58,8 +59,9 @@ public final class DrawingExtractor {
     public static Outcome extract(Context context, List<DrawingEntry> drawings, String existingUri, Progress progress)
             throws Exception {
         VentNameStore.load(context);
-        RoomFormatStore.load(context);
         VentFormatStore.load(context);
+        LearnedRuleStore.load(context);
+        RoomFormats.use(java.util.Collections.<RoomFormats.Derived>emptyList());
         byte[] base = existingUri == null ? readAsset(context, "matprotokoll_grund.xlsx") : readUri(context, Uri.parse(existingUri));
         boolean fromTemplate = existingUri == null;
         PpOcr ocr = openOcr(context);

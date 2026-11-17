@@ -61,7 +61,7 @@
     <string name="status_idle">Inte startad</string>
     <string name="eta_idle">Beräknad tid kvar: –</string>
     <string name="name_required">Fyll i namnet på Excel-filen.</string>
-    <string name="drawings_required">Välj minst en PDF eller ta ett foto.</string>
+    <string name="drawings_required">Välj minst en PDF eller en bild.</string>
     <string name="no_camera">Hittar ingen kamera-app.</string>
     <string name="camera_denied">Kameran behöver tillstånd för att ta foto.</string>
     <string name="notifications_denied">Aviseringar är avstängda. Avläsningen körs ändå, men telefonen kanske inte visar förloppet.</string>
@@ -73,4 +73,28 @@
     <string name="crash_hint">Kopiera texten och skicka den. En kopia sparas i Nedladdningar som ventapp-crashlog.txt när telefonen tillåter det.</string>
     <string name="crash_copy">Kopiera</string>
     <string name="crash_copied">Kopierat.</string>
+    <string name="settings_gear">⚙</string>
+    <string name="settings_title">Inställningar</string>
+    <string name="language">Språk</string>
+    <string name="language_sv">Svenska</string>
+    <string name="language_fi">Suomi</string>
+    <string name="reset_all">Återställ till grundinställningar</string>
+    <string name="reset_confirm_title">Återställ?</string>
+    <string name="reset_confirm_body">Sparad dontext, egna ventilnamn och inlärda rättningar tas bort.</string>
+    <string name="reset_done">Grundinställningarna är tillbaka.</string>
+    <string name="learned_rules">Inlärda rättningar</string>
+    <string name="learned_empty">Inga rättningar ännu.</string>
+    <string name="delete_rule">Ta bort rättning</string>
+    <string name="report_error">Anmäl ett fel</string>
+    <string name="report_title">Anmäl ett fel</string>
+    <string name="report_help">Ändra en rad, skriv drop i sidan om den inte ska finnas, eller lägg till en missad rad med råtexten den ska gälla.</string>
+    <string name="report_raw">Råtext från ritningen</string>
+    <string name="report_room">Rum</string>
+    <string name="report_vent">Don</string>
+    <string name="report_size">Storlek</string>
+    <string name="report_behov">Behov</string>
+    <string name="report_side">Sida: tilluft eller franluft</string>
+    <string name="report_drop">Ska inte finnas</string>
+    <string name="report_missing">Lägg till missad rad</string>
+    <string name="report_save">Spara och gör om Excel</string>
 </resources>

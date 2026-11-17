@@ -1,6 +1,7 @@
 package fi.nyja.ventapp;
 
 import android.app.Activity;
+import android.content.Context;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.CompoundButton;
@@ -22,6 +23,11 @@ public class VentNamesActivity extends Activity {
     private EditText nameField;
     private RadioButton typeSupply;
     private boolean ignoreSwitch;
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(AppLocale.wrap(newBase));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

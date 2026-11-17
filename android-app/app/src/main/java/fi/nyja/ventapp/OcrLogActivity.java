@@ -2,6 +2,7 @@ package fi.nyja.ventapp;
 
 import android.app.Activity;
 import android.content.ContentValues;
+import android.content.Context;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -18,6 +19,11 @@ import java.io.OutputStream;
 /** Shows every string the reader saw, and keeps a copy in Downloads. */
 public class OcrLogActivity extends Activity {
     public static final String EXTRA_TEXT = "text";
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(AppLocale.wrap(newBase));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

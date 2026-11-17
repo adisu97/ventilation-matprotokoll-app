@@ -1,6 +1,7 @@
 package fi.nyja.ventapp;
 
 import android.app.Activity;
+import android.content.Context;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.EditText;
@@ -10,6 +11,7 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.List;
 
+import fi.nyja.ventapp.engine.LearnedRules;
 import fi.nyja.ventapp.engine.PendingSize;
 import fi.nyja.ventapp.engine.ProtocolBuilder;
 import fi.nyja.ventapp.engine.ProtocolRow;
@@ -19,6 +21,11 @@ import fi.nyja.ventapp.engine.ProtocolXlsx;
 public class SizeReviewActivity extends Activity {
     private final List<EditText> fields = new ArrayList<EditText>();
     private boolean applied;
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(AppLocale.wrap(newBase));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,6 +107,9 @@ public class SizeReviewActivity extends Activity {
                 }
                 List<ProtocolRow> rows = state.sheets.get(item.sheetIndex).rows;
                 String typed = fields.get(i).getText() == null ? "" : fields.get(i).getText().toString();
+                if (typed.trim().length() > 0 && item.vent != null && item.vent.raw.trim().length() > 0) {
+                    LearnedRules.current().put(LearnedRules.SIZE, item.vent.raw, typed.trim());
+                }
                 rows.addAll(ProtocolBuilder.rowsForConfirmedSize(rows, item, typed));
             }
         }
@@ -109,6 +119,11 @@ public class SizeReviewActivity extends Activity {
             }
         } catch (Exception ex) {
             state.error = ex.getMessage() == null ? "Kunde inte skriva Excel-filen." : ex.getMessage();
+        }
+        try {
+            LearnedRuleStore.save(this, LearnedRules.current());
+        } catch (Exception ignored) {
+            // The Excel file is still written. The rule is kept in memory for this run.
         }
         state.needsSize = false;
         state.pending = new ArrayList<PendingSize>();

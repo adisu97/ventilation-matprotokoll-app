@@ -2,6 +2,7 @@ package fi.nyja.ventapp;
 
 import android.app.Activity;
 import android.content.ClipData;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -39,6 +40,11 @@ public class PreviewActivity extends Activity {
     private boolean pdf;
     private Uri uri;
     private String mime = "application/octet-stream";
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(AppLocale.wrap(newBase));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

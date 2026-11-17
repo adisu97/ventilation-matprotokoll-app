@@ -11,10 +11,18 @@ public final class ProtocolRow {
     public final boolean unsure;
     public final String unsureReason;
     public final double confidence;
+    public final String raw;
 
     public ProtocolRow(String room, String exhaustName, String exhaustSize, Double exhaustBehov,
                        String supplyName, String supplySize, Double supplyBehov,
                        boolean unsure, String unsureReason, double confidence) {
+        this(room, exhaustName, exhaustSize, exhaustBehov, supplyName, supplySize, supplyBehov,
+                unsure, unsureReason, confidence, "");
+    }
+
+    public ProtocolRow(String room, String exhaustName, String exhaustSize, Double exhaustBehov,
+                       String supplyName, String supplySize, Double supplyBehov,
+                       boolean unsure, String unsureReason, double confidence, String raw) {
         this.room = room == null ? "" : room;
         this.exhaustName = exhaustName == null ? "" : exhaustName;
         this.exhaustSize = exhaustSize;
@@ -25,5 +33,6 @@ public final class ProtocolRow {
         this.unsure = unsure;
         this.unsureReason = unsureReason == null ? "" : unsureReason;
         this.confidence = confidence;
+        this.raw = raw == null ? "" : raw;
     }
 }

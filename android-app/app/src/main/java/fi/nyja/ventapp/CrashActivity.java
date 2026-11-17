@@ -2,6 +2,7 @@ package fi.nyja.ventapp;
 
 import android.app.Activity;
 import android.content.ClipData;
+import android.content.Context;
 import android.content.ClipboardManager;
 import android.os.Bundle;
 import android.view.View;
@@ -11,6 +12,11 @@ import android.widget.Toast;
 /** Shown in its own process so the message survives the crashed process. */
 public class CrashActivity extends Activity {
     public static final String EXTRA_TEXT = "text";
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(AppLocale.wrap(newBase));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

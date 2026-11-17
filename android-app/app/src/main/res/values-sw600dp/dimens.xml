@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <dimen name="screen_padding">32dp</dimen>
-    <dimen name="button_height">72dp</dimen>
-    <dimen name="body_text">20sp</dimen>
-    <dimen name="gap">16dp</dimen>
+    <dimen name="screen_padding">12dp</dimen>
+    <dimen name="button_height">44dp</dimen>
+    <dimen name="body_text">17sp</dimen>
+    <dimen name="gap">8dp</dimen>
 </resources>

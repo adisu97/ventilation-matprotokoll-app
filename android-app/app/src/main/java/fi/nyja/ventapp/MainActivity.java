@@ -3,10 +3,8 @@ package fi.nyja.ventapp;
 import android.Manifest;
 import android.app.Activity;
 import android.content.ClipData;
-import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.net.Uri;
 import android.content.ContentValues;
@@ -40,12 +38,12 @@ import fi.nyja.ventapp.engine.SheetNames;
 
 public class MainActivity extends Activity {
     private static final int REQ_DRAWINGS = 1;
-    private static final int REQ_CAMERA = 2;
-    private static final int REQ_CAMERA_PERMISSION = 3;
     private static final int REQ_WORKBOOK = 4;
     private static final int REQ_NOTIFICATIONS = 8;
     private static final int REQ_SIZES = 9;
     private static final int REQ_SETUP = 10;
+    private static final int REQ_SETTINGS = 12;
+    private static final int REQ_REPORT = 13;
     private static final long PER_FILE_MS = 1000L;
     private static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -64,16 +62,12 @@ public class MainActivity extends Activity {
     private Button downloadButton;
     private Switch appendExisting;
 
-    private int nextPhoto = 1;
     private boolean done;
     private boolean sizeReviewShown;
     private int runTotal;
     private boolean ignoreSwitch;
     private String existingWorkbookUri;
     private String existingWorkbookName;
-    private Uri pendingPhotoUri;
-    private String pendingPhotoName;
-    private String pendingPhotoPath;
     private final Runnable jobListener = new Runnable() {
         @Override
         public void run() {
@@ -133,8 +127,7 @@ public class MainActivity extends Activity {
         if (excelName == null || fileList == null || emptyList == null
                 || progressBar == null || statusView == null || etaView == null || formError == null
                 || workbookMode == null || startButton == null || downloadButton == null
-                || appendExisting == null || findViewById(R.id.pickPdfs) == null
-                || findViewById(R.id.takePhoto) == null) {
+                || appendExisting == null || findViewById(R.id.pickPdfs) == null) {
             throw new IllegalStateException("Skärmen saknar en nödvändig vy.");
         }
 
@@ -144,10 +137,16 @@ public class MainActivity extends Activity {
                 pickDrawings();
             }
         });
-        findViewById(R.id.takePhoto).setOnClickListener(new View.OnClickListener() {
+        findViewById(R.id.settings).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                takePhoto();
+                startActivityForResult(new Intent(MainActivity.this, SettingsActivity.class), REQ_SETTINGS);
+            }
+        });
+        findViewById(R.id.reportError).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivityForResult(new Intent(MainActivity.this, ReportActivity.class), REQ_REPORT);
             }
         });
         findViewById(R.id.showOcr).setOnClickListener(new View.OnClickListener() {
@@ -167,12 +166,6 @@ public class MainActivity extends Activity {
             @Override
             public void onClick(View v) {
                 startActivity(new Intent(MainActivity.this, VentNamesActivity.class));
-            }
-        });
-        findViewById(R.id.roomFormats).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(MainActivity.this, RoomFormatsActivity.class));
             }
         });
         findViewById(R.id.appendLabel).setOnClickListener(new View.OnClickListener() {
@@ -228,14 +221,10 @@ public class MainActivity extends Activity {
             if (saved != null) {
                 entries.addAll(saved);
             }
-            nextPhoto = savedInstanceState.getInt("nextPhoto", 1);
             done = savedInstanceState.getBoolean("done", false);
             runTotal = savedInstanceState.getInt("runTotal", entries.size());
             existingWorkbookUri = savedInstanceState.getString("existingWorkbookUri");
             existingWorkbookName = savedInstanceState.getString("existingWorkbookName");
-            pendingPhotoUri = savedInstanceState.getParcelable("pendingPhoto");
-            pendingPhotoName = savedInstanceState.getString("pendingName");
-            pendingPhotoPath = savedInstanceState.getString("pendingPath");
             ignoreSwitch = true;
             appendExisting.setChecked(existingWorkbookUri != null);
             ignoreSwitch = false;
@@ -287,18 +276,12 @@ public class MainActivity extends Activity {
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putParcelableArrayList("entries", entries);
-        outState.putInt("nextPhoto", nextPhoto);
         outState.putBoolean("done", done);
         outState.putBoolean("running", extraction.isRunning());
         outState.putLong("elapsed", extraction.elapsedMs());
         outState.putInt("runTotal", runTotal);
         outState.putString("existingWorkbookUri", existingWorkbookUri);
         outState.putString("existingWorkbookName", existingWorkbookName);
-        if (pendingPhotoUri != null) {
-            outState.putParcelable("pendingPhoto", pendingPhotoUri);
-        }
-        outState.putString("pendingName", pendingPhotoName);
-        outState.putString("pendingPath", pendingPhotoPath);
     }
 
     @Override
@@ -330,49 +313,9 @@ public class MainActivity extends Activity {
         startActivityForResult(intent, REQ_WORKBOOK);
     }
 
-    private void takePhoto() {
-        if (Build.VERSION.SDK_INT >= 23
-                && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERMISSION);
-            return;
-        }
-        launchCamera();
-    }
-
-    private void launchCamera() {
-        File dir = new File(getFilesDir(), "photos");
-        if (!dir.exists() && !dir.mkdirs()) {
-            Toast.makeText(this, R.string.photo_failed, Toast.LENGTH_LONG).show();
-            return;
-        }
-        File photo = new File(dir, "foto-" + System.currentTimeMillis() + ".jpg");
-        pendingPhotoPath = photo.getAbsolutePath();
-        pendingPhotoName = getString(R.string.photo_name, nextPhoto);
-        pendingPhotoUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", photo);
-
-        Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
-        intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, pendingPhotoUri);
-        intent.setClipData(ClipData.newRawUri("photo", pendingPhotoUri));
-        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        List<ResolveInfo> cameras = getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
-        for (int i = 0; i < cameras.size(); i++) {
-            String packageName = cameras.get(i).activityInfo.packageName;
-            grantUriPermission(packageName, pendingPhotoUri,
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        }
-        if (cameras.isEmpty()) {
-            clearPendingPhoto(true);
-            Toast.makeText(this, R.string.no_camera, Toast.LENGTH_LONG).show();
-            return;
-        }
-        if (cameras.size() == 1) {
-            intent.setComponent(new ComponentName(
-                    cameras.get(0).activityInfo.packageName,
-                    cameras.get(0).activityInfo.name));
-            startActivityForResult(intent, REQ_CAMERA);
-            return;
-        }
-        startActivityForResult(Intent.createChooser(intent, getString(R.string.take_photo)), REQ_CAMERA);
+    @Override
+    protected void attachBaseContext(android.content.Context newBase) {
+        super.attachBaseContext(AppLocale.wrap(newBase));
     }
 
     @Override
@@ -386,9 +329,13 @@ public class MainActivity extends Activity {
             }
             return;
         }
-        if (requestCode == REQ_SIZES) {
+        if (requestCode == REQ_SIZES || requestCode == REQ_REPORT) {
             sizeReviewShown = false;
             applyJob();
+            return;
+        }
+        if (requestCode == REQ_SETTINGS) {
+            recreate();
             return;
         }
         if (requestCode == REQ_DRAWINGS && resultCode == RESULT_OK && data != null) {
@@ -403,20 +350,6 @@ public class MainActivity extends Activity {
             } else {
                 clearExistingWorkbook();
             }
-        } else if (requestCode == REQ_CAMERA) {
-            if (resultCode == RESULT_OK && pendingPhotoUri != null && photoFileHasBytes()) {
-                entries.add(new DrawingEntry(
-                        pendingPhotoName,
-                        pendingPhotoUri.toString(),
-                        DrawingEntry.KIND_PHOTO,
-                        pendingPhotoPath));
-                nextPhoto += 1;
-                onDrawingsChanged();
-                Toast.makeText(this, R.string.photo_added, Toast.LENGTH_SHORT).show();
-                clearPendingPhoto(false);
-            } else {
-                clearPendingPhoto(true);
-            }
         }
     }
 
@@ -429,14 +362,6 @@ public class MainActivity extends Activity {
             }
             askFormats();
             return;
-        }
-        if (requestCode != REQ_CAMERA_PERMISSION) {
-            return;
-        }
-        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            launchCamera();
-        } else {
-            Toast.makeText(this, R.string.camera_denied, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -496,26 +421,6 @@ public class MainActivity extends Activity {
         }
         String last = uri.getLastPathSegment();
         return last == null ? "ritning" : last;
-    }
-
-    private boolean photoFileHasBytes() {
-        if (pendingPhotoPath == null) {
-            return false;
-        }
-        File file = new File(pendingPhotoPath);
-        return file.isFile() && file.length() > 0L;
-    }
-
-    private void clearPendingPhoto(boolean deleteFile) {
-        if (deleteFile && pendingPhotoPath != null) {
-            File file = new File(pendingPhotoPath);
-            if (file.exists() && !file.delete()) {
-                file.deleteOnExit();
-            }
-        }
-        pendingPhotoUri = null;
-        pendingPhotoName = null;
-        pendingPhotoPath = null;
     }
 
     private void clearExistingWorkbook() {

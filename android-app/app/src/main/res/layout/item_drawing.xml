@@ -5,7 +5,7 @@
     android:layout_marginBottom="@dimen/gap"
     android:background="@drawable/bg_row"
     android:gravity="center_vertical"
-    android:minHeight="72dp"
+    android:minHeight="44dp"
     android:orientation="horizontal"
     android:padding="12dp">
 

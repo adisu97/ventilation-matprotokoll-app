@@ -237,7 +237,7 @@ public final class ProtocolBuilder {
         List<Room> rooms = new ArrayList<Room>();
         for (int i = 0; i < tokens.size(); i++) {
             OcrToken token = tokens.get(i);
-            if (stackedNameTokens.contains(token)) {
+            if (stackedNameTokens.contains(token) || RoomFormats.isAreaPiece(tokens, token)) {
                 continue;
             }
             String text = LatinScript.clean(token.text.trim());
@@ -258,7 +258,18 @@ public final class ProtocolBuilder {
             }
             String name = named == null || named.isEmpty() ? nearbyName(tokens, token, stackedNameTokens) : named;
             name = LatinScript.correctRoomName(name);
-            rooms.add(new Room(parts.number, name, token.x, token.y, token.confidence));
+            LearnedRules.Rule roomRule = LearnedRules.current().match(LearnedRules.ROOM, text);
+            String number = parts.number;
+            if (roomRule != null && !roomRule.value.trim().isEmpty()) {
+                RoomText learned = splitRoom(roomRule.value);
+                if (learned != null) {
+                    number = learned.number;
+                    if (!learned.name.isEmpty()) {
+                        name = learned.name;
+                    }
+                }
+            }
+            rooms.add(new Room(number, name, token.x, token.y, token.confidence));
         }
         return rooms;
     }
@@ -443,8 +454,16 @@ public final class ProtocolBuilder {
             String distanceNote, List<PendingSize> pending) {
         List<Vent> usable = new ArrayList<Vent>();
         boolean asked = false;
+        boolean removed = false;
         for (Vent vent : vents) {
-            if (pending != null && !LabelParser.sizeIsClear(vent.raw, vent.size)) {
+            boolean taughtSize = LearnedRules.current().match(LearnedRules.SIZE, vent.raw) != null;
+            Vent learned = LearnedRules.current().applyVent(vent);
+            if (learned == null) {
+                removed = true;
+                continue;
+            }
+            vent = learned;
+            if (pending != null && !taughtSize && !LabelParser.sizeIsClear(vent.raw, vent.size)) {
                 pending.add(new PendingSize(-1, label, vent));
                 asked = true;
                 continue;
@@ -467,7 +486,7 @@ public final class ProtocolBuilder {
         int n = Math.max(exhaust.size(), supply.size());
         List<ProtocolRow> rows = new ArrayList<ProtocolRow>();
         if (n == 0) {
-            if (asked) {
+            if (asked || removed) {
                 return rows;
             }
             rows.add(new ProtocolRow(label, "", null, null, "", null, null, true, "inget don i rummet", roomConf));
@@ -478,6 +497,8 @@ public final class ProtocolBuilder {
             Vent su = i < supply.size() ? supply.get(i) : null;
             String reason = unsureReason(ex, su, unknown, roomConf, distanceNote);
             double conf = Math.min(roomConf, Math.min(conf(ex), conf(su)));
+            String raw = ex != null && ex.raw != null && !ex.raw.isEmpty()
+                    ? ex.raw : (su == null || su.raw == null ? "" : su.raw);
             rows.add(new ProtocolRow(
                     i == 0 ? label : "",
                     ex == null ? "" : ex.canonicalName(),
@@ -488,7 +509,8 @@ public final class ProtocolBuilder {
                     su == null ? null : su.airflow,
                     reason != null,
                     reason,
-                    conf));
+                    conf,
+                    raw));
         }
         return rows;
     }
@@ -699,17 +721,24 @@ public final class ProtocolBuilder {
     }
 
     private static String nearbyName(List<OcrToken> tokens, OcrToken room, Set<OcrToken> skip) {
+        String stacked = RoomFormats.nameUnderOrAbove(tokens, room, skip);
+        if (!stacked.isEmpty()) {
+            return stacked;
+        }
         String best = "";
         double bestD = 42;
         for (OcrToken token : tokens) {
             if (token == room || (skip != null && skip.contains(token))) {
                 continue;
             }
-            String text = token.text.trim();
-            String name = roomName(LatinScript.correctRoomName(text));
-            if (name == null) {
+            if (RoomFormats.isAreaPiece(tokens, token)) {
                 continue;
             }
+            String text = token.text.trim();
+            if (!RoomFormats.looksLikeStackedName(text) && !RoomFormats.looksLikeStackedName(LatinScript.correctRoomName(text))) {
+                continue;
+            }
+            String name = LatinScript.correctRoomName(text);
             double d = dist(room.x, room.y, token.x, token.y);
             if (d < bestD) {
                 bestD = d;

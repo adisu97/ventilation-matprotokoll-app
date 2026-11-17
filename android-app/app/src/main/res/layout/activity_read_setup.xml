@@ -11,7 +11,7 @@
         android:id="@+id/readSetupTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/read_setup_room_title"
+        android:text="@string/read_setup_vent_title"
         android:textColor="@color/text_primary"
         android:textSize="22sp"
         android:textStyle="bold" />
@@ -21,23 +21,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="@string/read_setup_room_help"
+        android:text="@string/read_setup_vent_help"
         android:textColor="@color/text_secondary"
-        android:textSize="16sp" />
-
-    <EditText
-        android:id="@+id/roomExample"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:background="@drawable/bg_field"
-        android:gravity="top|start"
-        android:hint="@string/room_example_hint"
-        android:inputType="textMultiLine"
-        android:minHeight="96dp"
-        android:minLines="3"
-        android:textColor="@color/text_primary"
-        android:textColorHint="@color/hint"
         android:textSize="16sp" />
 
     <EditText
@@ -53,8 +38,7 @@
         android:minLines="2"
         android:textColor="@color/text_primary"
         android:textColorHint="@color/hint"
-        android:textSize="16sp"
-        android:visibility="gone" />
+        android:textSize="16sp" />
 
     <TextView
         android:id="@+id/readSetupError"
@@ -68,5 +52,5 @@
         android:id="@+id/readSetupNext"
         style="@style/PrimaryButton"
         android:layout_marginTop="12dp"
-        android:text="@string/read_setup_next" />
+        android:text="@string/read_setup_start" />
 </LinearLayout>
