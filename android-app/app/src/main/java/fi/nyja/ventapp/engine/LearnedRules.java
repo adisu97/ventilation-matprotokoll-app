@@ -138,13 +138,31 @@ public final class LearnedRules {
         }
         Rule flowRule = match(BEHOV, vent.raw);
         if (flowRule != null && !flowRule.value.trim().isEmpty()) {
-            try {
-                airflow = Double.valueOf(flowRule.value.trim().replace(',', '.'));
-            } catch (NumberFormatException ignored) {
-                airflow = vent.airflow;
+            java.util.regex.Matcher number = java.util.regex.Pattern
+                    .compile("(\\d{1,4}(?:[.,]\\d{1,2})?)").matcher(flowRule.value);
+            if (number.find()) {
+                try {
+                    airflow = Double.valueOf(number.group(1).replace(',', '.'));
+                } catch (NumberFormatException ignored) {
+                    airflow = vent.airflow;
+                }
             }
         }
-        return new Vent(name, kind, size, airflow, vent.qty, vent.x, vent.y, vent.raw, vent.confidence);
+        int qty = vent.qty < 1 ? 1 : vent.qty;
+        int named = LabelParser.leadingCount(name);
+        if (named > 1) {
+            qty = named;
+            name = LabelParser.stripLeadingCount(name);
+        } else if (LabelParser.countBeforeSize(size) > 1) {
+            qty = LabelParser.countBeforeSize(size);
+            size = LabelParser.sizeWithoutCount(size);
+        } else if (LabelParser.countBeforeSize(name) > 1) {
+            qty = LabelParser.countBeforeSize(name);
+            size = LabelParser.sizeWithoutCount(name);
+            name = name.replaceFirst("(?i)(?<!\\d)\\d{1,2}\\s*[xX×*]\\s*\\d{2,4}", " ")
+                    .replaceAll("\\s+", " ").trim();
+        }
+        return new Vent(name, kind, size, airflow, qty, vent.x, vent.y, vent.raw, vent.confidence);
     }
 
     public String toJson() {

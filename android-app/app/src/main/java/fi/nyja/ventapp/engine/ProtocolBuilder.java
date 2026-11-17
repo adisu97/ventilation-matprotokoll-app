@@ -317,8 +317,12 @@ public final class ProtocolBuilder {
                     if (kind == null) {
                         kind = vent.kind;
                     }
+                    String raw = vent.raw;
+                    if (LabelParser.airflowIsTotal(leftover.get(best).text)) {
+                        raw = vent.raw + " " + leftover.get(best).text;
+                    }
                     vent = new Vent(vent.name, kind, vent.size, Math.abs(air.value), vent.qty,
-                            vent.x, vent.y, vent.raw, vent.confidence);
+                            vent.x, vent.y, raw, vent.confidence);
                 }
                 vents.add(vent);
             }
@@ -368,8 +372,14 @@ public final class ProtocolBuilder {
         if (item == null || item.vent == null || typed == null || typed.trim().isEmpty()) {
             return none;
         }
-        Vent vent = new Vent(item.vent.name, item.vent.kind, typed.trim(), item.vent.airflow, item.vent.qty,
-                item.vent.x, item.vent.y, "", item.vent.confidence);
+        String typedSize = typed.trim();
+        int qty = item.vent.qty < 1 ? 1 : item.vent.qty;
+        if (LabelParser.countBeforeSize(typedSize) > 1) {
+            qty = LabelParser.countBeforeSize(typedSize);
+            typedSize = LabelParser.sizeWithoutCount(typedSize);
+        }
+        Vent vent = new Vent(item.vent.name, item.vent.kind, typedSize, item.vent.airflow, qty,
+                item.vent.x, item.vent.y, item.vent.raw, item.vent.confidence);
         boolean taken = false;
         if (existing != null && item.room != null && !item.room.isEmpty()) {
             for (int i = 0; i < existing.size(); i++) {
@@ -546,6 +556,13 @@ public final class ProtocolBuilder {
         return vent == null ? 1.0 : vent.confidence;
     }
 
+    /**
+     * One row per copy. Each row gets the same size.
+     * Behov is also the same number on every row: the label's number, not a share of it.
+     * When the label says the number is a total (tot, total, totalt, sammanlagt, summa, sum,
+     * yht, yhteensä), each row instead gets that number divided by the count, rounded to
+     * one decimal, so the rows add up to the label. 27 for 2 copies is 13.5 and 13.5.
+     */
     private static List<Vent> expand(Vent vent) {
         int n = Math.max(1, vent.qty);
         List<Vent> out = new ArrayList<Vent>();
@@ -553,15 +570,81 @@ public final class ProtocolBuilder {
             out.add(vent);
             return out;
         }
-        Double flow = null;
-        if (vent.airflow != null) {
-            double split = vent.airflow / n;
+        Double flow = vent.airflow;
+        if (flow != null && airflowIsTotal(vent)) {
+            double split = flow / n;
             flow = split == Math.rint(split) ? (double) (int) split : Math.round(split * 10.0) / 10.0;
         }
         for (int i = 0; i < n; i++) {
             out.add(new Vent(vent.name, vent.kind, vent.size, flow, 1, vent.x, vent.y, vent.raw, vent.confidence));
         }
         return out;
+    }
+
+    private static boolean airflowIsTotal(Vent vent) {
+        if (LabelParser.airflowIsTotal(vent.raw)) {
+            return true;
+        }
+        LearnedRules.Rule rule = LearnedRules.current().match(LearnedRules.BEHOV, vent.raw);
+        return rule != null && LabelParser.airflowIsTotal(rule.value);
+    }
+
+    /**
+     * Rows for a correction screen. A multiplier in the vent name or in the size
+     * becomes that many rows. The room cell is written only on the first.
+     */
+    public static List<ProtocolRow> rowsFromCorrection(String room, String ventName, String size, String behov,
+            String side, String raw) {
+        String name = ventName == null ? "" : ventName.trim();
+        String sized = size == null ? "" : size.trim();
+        int qty = 1;
+        int named = LabelParser.leadingCount(name);
+        if (named > 1) {
+            qty = named;
+            name = LabelParser.stripLeadingCount(name);
+        }
+        int beforeSize = LabelParser.countBeforeSize(name + " " + sized);
+        if (named <= 1 && beforeSize > 1) {
+            qty = beforeSize;
+            if (LabelParser.countBeforeSize(sized) > 1) {
+                sized = LabelParser.sizeWithoutCount(sized);
+            }
+            if (LabelParser.countBeforeSize(name) > 1) {
+                sized = LabelParser.sizeWithoutCount(name);
+                name = name.replaceFirst("(?i)(?<!\\d)\\d{1,2}\\s*[xX×*]\\s*\\d{2,4}", " ")
+                        .replaceAll("\\s+", " ").trim();
+            }
+        }
+        Double flow = null;
+        if (behov != null && behov.trim().length() > 0) {
+            java.util.regex.Matcher number = java.util.regex.Pattern
+                    .compile("(\\d{1,4}(?:[.,]\\d{1,2})?)").matcher(behov);
+            if (number.find()) {
+                try {
+                    flow = Double.valueOf(number.group(1).replace(',', '.'));
+                } catch (NumberFormatException ignored) {
+                    flow = null;
+                }
+            }
+        }
+        boolean total = LabelParser.airflowIsTotal(behov) || LabelParser.airflowIsTotal(raw);
+        if (total && flow != null && qty > 1) {
+            double split = flow / qty;
+            flow = split == Math.rint(split) ? (double) (int) split : Math.round(split * 10.0) / 10.0;
+        }
+        boolean exhaust = side != null && ("franluft".equals(side) || "frånluft".equals(side) || "exhaust".equals(side)
+                || side.toLowerCase(java.util.Locale.ROOT).startsWith("fr"));
+        List<ProtocolRow> rows = new ArrayList<ProtocolRow>();
+        for (int i = 0; i < qty; i++) {
+            String cell = i == 0 ? (room == null ? "" : room) : "";
+            String keptRaw = i == 0 && raw != null ? raw : "";
+            if (exhaust) {
+                rows.add(new ProtocolRow(cell, name, sized, flow, "", null, null, false, "", 1, keptRaw));
+            } else {
+                rows.add(new ProtocolRow(cell, "", null, null, name, sized, flow, false, "", 1, keptRaw));
+            }
+        }
+        return rows;
     }
 
     private static List<Vent> dedupe(List<Vent> vents) {

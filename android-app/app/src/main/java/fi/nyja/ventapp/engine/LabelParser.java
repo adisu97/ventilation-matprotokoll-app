@@ -81,8 +81,17 @@ public final class LabelParser {
             name = catalog.storeName(hit.key);
             rest = norm.substring(Math.min(hit.end, norm.length()));
         }
-        if (qty < 1 || qty > 12) {
+        if (qty < 1) {
             qty = 1;
+        }
+        if (qty > 99) {
+            qty = 99;
+        }
+        if (qty == 1) {
+            int beforeSize = countBeforeSize(rest);
+            if (beforeSize > 1) {
+                qty = beforeSize;
+            }
         }
         String size = sizeFromRest(rest, name);
         Double airflow = null;
@@ -163,6 +172,7 @@ public final class LabelParser {
             return null;
         }
         String s = normalize(text).replace(" ", "");
+        s = s.replaceAll("(?i)TOT(?:ALT)?|SAMMANLAGT|SUMMA|SUM|YHTEENS[AÄ]|YHT", "");
         boolean cubic = s.contains("M3/H") || s.contains("M³/H");
         boolean hasUnit = s.contains("L/S") || s.contains("LS") || cubic;
         s = s.replace("L/S", "").replace("LS", "").replace("M3/H", "").replace("M³/H", "");
@@ -266,7 +276,12 @@ public final class LabelParser {
         if ("hfk".equals(low) || "alg".equals(low) || "pra".equals(low) || "eagle".equals(low) || "pelican".equals(low)) {
             Matcher m = MULT_SIZE.matcher(rest);
             if (m.find() && isStandardSize(Integer.parseInt(m.group(2)))) {
-                return Integer.parseInt(m.group(1)) + "*" + Integer.parseInt(m.group(2));
+                int count = Integer.parseInt(m.group(1));
+                int sized = Integer.parseInt(m.group(2));
+                if (count >= 2 && count < 80) {
+                    return Integer.toString(sized);
+                }
+                return count + "*" + sized;
             }
         }
         Matcher range = SIZE_RANGE.matcher(rest);
@@ -288,6 +303,84 @@ public final class LabelParser {
             }
         }
         return null;
+    }
+
+    private static final Pattern LEADING_COUNT = Pattern.compile(
+            "(?i)^(\\d{1,2})\\s*[xX×*]\\s*[A-ZÅÄÖ]");
+    private static final Pattern COUNT_THEN_SIZE = Pattern.compile(
+            "(?i)(?<!\\d)(\\d{1,2})\\s*[xX×*]\\s*(\\d{2,4})(?!\\d)");
+    private static final Pattern TOTAL_FLOW = Pattern.compile(
+            "(?i)(?<![\\p{L}])(tot(?:alt)?|sammanlagt|summa|yhteens[aä]|yht|total|sum)(?![\\p{L}])");
+
+    /**
+     * 2x, 2 x, 2X or 2× in front of a name. 1 when the text does not start that way.
+     * A number in front of a size, such as 2x125, is {@link #countBeforeSize}.
+     */
+    public static int leadingCount(String text) {
+        if (text == null) {
+            return 1;
+        }
+        Matcher match = LEADING_COUNT.matcher(text.trim());
+        if (!match.find()) {
+            return 1;
+        }
+        return clampCount(match.group(1));
+    }
+
+    public static String stripLeadingCount(String text) {
+        if (text == null || leadingCount(text) <= 1) {
+            return text == null ? "" : text.trim();
+        }
+        return text.trim().replaceFirst("(?i)^\\d{1,2}\\s*[xX×*]\\s*", "").trim();
+    }
+
+    /**
+     * A count written just before the size: "KSO 3x125", "3 x 160", "4×200".
+     * 200x100 stays a rectangle, because both numbers are at least 80.
+     */
+    public static int countBeforeSize(String text) {
+        if (text == null) {
+            return 1;
+        }
+        Matcher match = COUNT_THEN_SIZE.matcher(text);
+        if (!match.find()) {
+            return 1;
+        }
+        int count = Integer.parseInt(match.group(1));
+        int size = Integer.parseInt(match.group(2));
+        if (count < 2 || count >= 80 || size < 80) {
+            return 1;
+        }
+        return count;
+    }
+
+    public static String sizeWithoutCount(String text) {
+        if (text == null) {
+            return "";
+        }
+        if (countBeforeSize(text) <= 1) {
+            return text.trim();
+        }
+        Matcher match = COUNT_THEN_SIZE.matcher(text);
+        match.find();
+        return Integer.toString(Integer.parseInt(match.group(2)));
+    }
+
+    /** True when the label says the airflow number is the sum for every copy. */
+    public static boolean airflowIsTotal(String text) {
+        return text != null && TOTAL_FLOW.matcher(text).find();
+    }
+
+    private static int clampCount(String digits) {
+        try {
+            int count = Integer.parseInt(digits);
+            if (count >= 2 && count <= 99) {
+                return count;
+            }
+        } catch (NumberFormatException ignored) {
+            return 1;
+        }
+        return 1;
     }
 
     public static final class Airflow {

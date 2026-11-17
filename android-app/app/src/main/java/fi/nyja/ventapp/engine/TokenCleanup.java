@@ -49,6 +49,22 @@ public final class TokenCleanup {
             }
             merged.add(token);
         }
+        for (int i = 0; i + 1 < merged.size(); i++) {
+            OcrToken left = merged.get(i);
+            OcrToken right = merged.get(i + 1);
+            if (!right.text.trim().matches("(?i)^\\d{1,2}\\s*[x×*].*")) {
+                continue;
+            }
+            if (!countFollows(left, right)) {
+                continue;
+            }
+            if (LabelParser.parse(left.text, left.x, left.y, left.confidence) == null) {
+                continue;
+            }
+            merged.set(i, join(left, right));
+            merged.remove(i + 1);
+            i--;
+        }
         List<OcrToken> kept = new ArrayList<OcrToken>();
         for (OcrToken token : merged) {
             if (token.text.trim().length() >= 2) {
@@ -77,13 +93,40 @@ public final class TokenCleanup {
         if (room != null && room.name.isEmpty() && room.number.equalsIgnoreCase(l)) {
             return false;
         }
-        if (r.matches("^[+\\-].*") || r.matches("(?i)^cra\\b.*") || r.matches("^\\d.*")) {
+        if (l.matches("(?i)^\\d{1,2}$") && r.matches("(?i)^[x×*]$")) {
+            return true;
+        }
+        if (r.matches("^[+\\-].*") || r.matches("(?i)^cra\\b.*")) {
+            return true;
+        }
+        if (r.matches("^\\d.*")) {
+            if (r.matches("^\\d{1,2}$")) {
+                try {
+                    if (Integer.parseInt(r) < 80) {
+                        return false;
+                    }
+                } catch (NumberFormatException ignored) {
+                    return false;
+                }
+            }
             return true;
         }
         if (l.matches("(?i)^\\d+\\s*[x×*]$") || l.matches("(?i).*\\d\\s*[x×*]$")) {
             return true;
         }
         return l.equalsIgnoreCase("cra") || r.equalsIgnoreCase("cra");
+    }
+
+    /** A count that was kept separate so it could pick up the x, then the size. */
+    private static boolean countFollows(OcrToken left, OcrToken right) {
+        double height = Math.max(4, Math.max(left.h, right.h));
+        if (Math.abs(left.y - right.y) > height * 0.8) {
+            return false;
+        }
+        double leftEdge = left.w > 0 ? left.x + left.w / 2.0 : left.x;
+        double rightEdge = right.w > 0 ? right.x - right.w / 2.0 : right.x;
+        double gap = rightEdge - leftEdge;
+        return gap >= -2 && gap < Math.max(48, height * 4);
     }
 
     private static boolean sameLine(OcrToken left, OcrToken right) {
@@ -97,7 +140,11 @@ public final class TokenCleanup {
     }
 
     private static OcrToken join(OcrToken left, OcrToken right) {
-        String glue = right.text.startsWith("-") ? "" : " ";
+        LabelParser.Airflow air = LabelParser.parseAirflowToken(right.text);
+        boolean sizeDash = air != null
+                && LabelParser.looksLikeDuctSize(Integer.toString((int) Math.abs(air.value)))
+                && !LabelParser.airflowIsTotal(right.text);
+        String glue = right.text.startsWith("-") && (air == null || sizeDash) ? "" : " ";
         double x0 = left.w > 0 ? left.x - left.w / 2.0 : left.x;
         double x1 = right.w > 0 ? right.x + right.w / 2.0 : right.x;
         return new OcrToken(left.text + glue + right.text, (x0 + x1) / 2.0, (left.y + right.y) / 2.0,

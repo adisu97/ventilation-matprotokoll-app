@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import fi.nyja.ventapp.engine.LearnedRules;
+import fi.nyja.ventapp.engine.ProtocolBuilder;
 import fi.nyja.ventapp.engine.ProtocolRow;
 import fi.nyja.ventapp.engine.ProtocolXlsx;
 
@@ -164,7 +165,7 @@ public class ReportActivity extends Activity {
             int[] address = addresses.get(i);
             if (address[0] < 0 || address[0] >= sheets.size()) {
                 if (!drop && !vent.isEmpty()) {
-                    sheets.get(0).rows.add(rowFrom(room, vent, size, behov, side, raw));
+                    sheets.get(0).rows.addAll(ProtocolBuilder.rowsFromCorrection(room, vent, size, behov, side, raw));
                 }
                 continue;
             }
@@ -175,7 +176,15 @@ public class ReportActivity extends Activity {
             if (drop) {
                 rows.remove(address[1]);
             } else {
-                rows.set(address[1], rowFrom(room, vent, size, behov, side, raw));
+                List<ProtocolRow> made = ProtocolBuilder.rowsFromCorrection(room, vent, size, behov, side, raw);
+                if (made.isEmpty()) {
+                    rows.remove(address[1]);
+                } else {
+                    rows.set(address[1], made.get(0));
+                    for (int k = 1; k < made.size(); k++) {
+                        rows.add(address[1] + k, made.get(k));
+                    }
+                }
             }
         }
         try {

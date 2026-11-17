@@ -802,7 +802,10 @@ public class ProtocolLogicTest {
             assertEquals("", rows.get(1).room);
             assertEquals("eagle", rows.get(0).supplyName);
             assertEquals("eagle", rows.get(1).supplyName);
-            assertEquals(27.0, rows.get(0).supplyBehov + rows.get(1).supplyBehov, 0.01);
+            assertEquals(27.0, rows.get(0).supplyBehov, 0.01);
+            assertEquals(27.0, rows.get(1).supplyBehov, 0.01);
+            assertEquals("125", rows.get(0).supplySize);
+            assertEquals("125", rows.get(1).supplySize);
         } finally {
             VentFormats.use("");
         }
