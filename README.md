@@ -56,9 +56,13 @@ python -m matprotokoll.webapp
 
 ## Android-app (APK, på telefonen)
 
-Debug-signerad sideload-APK: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-2/ventapp.apk
+Mindre APK för 64-bitarstelefoner, till exempel Galaxy A52: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-22/ventapp-arm64.apk
 
-Paket-id är `fi.nyja.ventapp`. **Avinstallera den gamla appen en gång** om telefonen redan har en tidigare test-APK. De byggdes med en ny debug-nyckel vid varje CI-körning, så Android säger "App was not installed" vid uppdatering. Från versionCode 5 används samma nyckel varje gång, och senare APK:er kan installeras ovanpå varandra.
+APK med både 32- och 64-bitars: https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/app-apk-22/ventapp.apk
+
+Paket-id är `fi.nyja.ventapp`, version 1.25 (versionCode 25, targetSdk 35) för båda filerna, samma nyckel. `2x`, `2 x`, `2X` och `2×` före namnet eller före storleken ger lika många rader. Behovet på etiketten är summan för alla don och delas jämnt. `2x` och `+54` blir två rader med 27. `3x` och `+50` blir 16,7 på varje rad, så totalsumman kan bli 50,1. Android-bladet skriver rumsnummer och rumsnamn i samma cell, till exempel E116 Trappa. Frånluft börjar i kolumn B och tilluft i kolumn H. Fler don i samma rum lämnar rumscellen tom. Överst på skärmen står versionsnumret och en kugghjulsknapp för språk (svenska eller finska) och återställning. Starta frågar bara efter donformat, med förra exemplet ifyllt. Rumsökningen är den breda sökningen: nummer, namn i närheten, yta hoppas över. Kameraknappen är borta. Bilder väljs från lagringen. En rättning av storlek, eller Anmäl ett fel, sparas på telefonen och används nästa gång samma råtext kommer igen. Knappen Ventilnamn visar donen som avläsningen söker efter. Varje ritning har ett öga som visar filen. Om appen kraschar vid start visas en felskärm med knappen Kopiera, och texten sparas som `ventapp-crashlog.txt` i Nedladdningar. **Avinstallera den gamla appen en gång** om telefonen har en test-APK äldre än versionCode 5. Från versionCode 5 kan version 25 installeras ovanpå. Don med oklar storlek frågas innan de skrivs in. Visa avläst text sparar ventapp-ocr.txt i Nedladdningar.
+
+Om nedladdningen avbryts, prova först de här slumpfilerna (ingen app, bara data) för att se vilken storlek telefonen klarar: [5 MiB](https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-5mb.bin), [10 MiB](https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-10mb.bin), [20 MiB](https://github.com/adisu97/ventilation-matprotokoll-app/releases/download/dl-test-1/test-20mb.bin).
 
 Nyckeln `android-app/signing/ventapp-sideload.keystore` är en **publik engångsnyckel** med lösenordet `ventapp-sideload` i repot. Den finns bara så att sideload-uppdateringar har samma signatur (v1 för Android 5–6 och v2). Den är inte en produktionsnyckel och ska inte användas till något annat.
 

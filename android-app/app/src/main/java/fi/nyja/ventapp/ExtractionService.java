@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 
@@ -12,6 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import fi.nyja.ventapp.engine.PendingSize;
+import fi.nyja.ventapp.engine.ProtocolXlsx;
 import fi.nyja.ventapp.engine.SheetNames;
 
 /** Keeps extraction alive across rotation and while the screen is locked. */
@@ -51,9 +54,14 @@ public class ExtractionService extends Service {
         final ArrayList<DrawingEntry> items = intent.getParcelableArrayListExtra(EXTRA_ITEMS);
         STATE.running = true;
         STATE.done = false;
+        STATE.needsSize = false;
         STATE.error = null;
         STATE.notes = new ArrayList<String>();
+        STATE.debug = "";
         STATE.xlsx = null;
+        STATE.pending = new ArrayList<PendingSize>();
+        STATE.sheets = null;
+        STATE.template = null;
         STATE.filename = excel;
         STATE.startedAt = android.os.SystemClock.elapsedRealtime();
         notifyListeners();
@@ -75,8 +83,15 @@ public class ExtractionService extends Service {
                                     notifyListeners();
                                 }
                             });
-                    STATE.xlsx = outcome.xlsx;
                     STATE.notes = outcome.notes;
+                    STATE.debug = outcome.debug;
+                    STATE.sheets = outcome.sheets;
+                    STATE.template = outcome.template;
+                    STATE.fromTemplate = outcome.fromTemplate;
+                    STATE.pending = outcome.pending == null
+                            ? new ArrayList<PendingSize>() : outcome.pending;
+                    STATE.needsSize = !STATE.pending.isEmpty();
+                    STATE.xlsx = outcome.xlsx;
                     STATE.done = true;
                 } catch (Exception ex) {
                     STATE.error = ex.getMessage() == null ? "Avläsningen misslyckades." : ex.getMessage();
@@ -84,7 +99,11 @@ public class ExtractionService extends Service {
                 } finally {
                     STATE.running = false;
                     notifyListeners();
-                    stopForeground(true);
+                    if (Build.VERSION.SDK_INT >= 24) {
+                        stopForeground(STOP_FOREGROUND_REMOVE);
+                    } else {
+                        stopForeground(true);
+                    }
                     stopSelf();
                 }
             }
@@ -102,9 +121,13 @@ public class ExtractionService extends Service {
             Notification notification = new Notification.Builder(this, channel)
                     .setContentTitle("Läser ritningar")
                     .setContentText("Mätprotokoll arbetar.")
-                    .setSmallIcon(android.R.drawable.stat_sys_download)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
                     .build();
-            startForeground(7, notification);
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(7, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            } else {
+                startForeground(7, notification);
+            }
         }
     }
 
@@ -123,7 +146,13 @@ public class ExtractionService extends Service {
         public volatile String currentName = "";
         public volatile String error;
         public volatile String filename = SheetNames.workbookFileName("matprotokoll");
+        public volatile String debug = "";
         public volatile byte[] xlsx;
+        public volatile boolean needsSize;
+        public volatile boolean fromTemplate;
+        public volatile byte[] template;
+        public volatile List<ProtocolXlsx.DrawingSheet> sheets;
+        public volatile List<PendingSize> pending = new ArrayList<PendingSize>();
         public volatile List<String> notes = new ArrayList<String>();
         public volatile long startedAt;
     }
