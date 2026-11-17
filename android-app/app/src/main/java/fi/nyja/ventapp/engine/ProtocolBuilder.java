@@ -558,10 +558,11 @@ public final class ProtocolBuilder {
 
     /**
      * One row per copy. Each row gets the same size.
-     * Behov is also the same number on every row: the label's number, not a share of it.
-     * When the label says the number is a total (tot, total, totalt, sammanlagt, summa, sum,
-     * yht, yhteensä), each row instead gets that number divided by the count, rounded to
-     * one decimal, so the rows add up to the label. 27 for 2 copies is 13.5 and 13.5.
+     * The behov on the label is the total for every copy. Each row gets that total
+     * divided by the count. An exact share stays a whole number (54 for 2 copies is 27).
+     * Anything else is rounded to one decimal with half-up rounding (50 for 3 copies is
+     * 16.7). Every row gets that same rounded share, so the Excel total can be 0.1 away
+     * from the label: 16.7 + 16.7 + 16.7 = 50.1.
      */
     private static List<Vent> expand(Vent vent) {
         int n = Math.max(1, vent.qty);
@@ -570,23 +571,21 @@ public final class ProtocolBuilder {
             out.add(vent);
             return out;
         }
-        Double flow = vent.airflow;
-        if (flow != null && airflowIsTotal(vent)) {
-            double split = flow / n;
-            flow = split == Math.rint(split) ? (double) (int) split : Math.round(split * 10.0) / 10.0;
-        }
+        Double flow = vent.airflow == null ? null : sharePerRow(vent.airflow, n);
         for (int i = 0; i < n; i++) {
             out.add(new Vent(vent.name, vent.kind, vent.size, flow, 1, vent.x, vent.y, vent.raw, vent.confidence));
         }
         return out;
     }
 
-    private static boolean airflowIsTotal(Vent vent) {
-        if (LabelParser.airflowIsTotal(vent.raw)) {
-            return true;
+    /** Even share of a multiplied behov. Whole when it divides, otherwise one decimal. */
+    public static double sharePerRow(double total, int copies) {
+        int n = Math.max(1, copies);
+        double split = total / n;
+        if (split == Math.rint(split)) {
+            return (double) (int) split;
         }
-        LearnedRules.Rule rule = LearnedRules.current().match(LearnedRules.BEHOV, vent.raw);
-        return rule != null && LabelParser.airflowIsTotal(rule.value);
+        return Math.round(split * 10.0) / 10.0;
     }
 
     /**
@@ -627,10 +626,8 @@ public final class ProtocolBuilder {
                 }
             }
         }
-        boolean total = LabelParser.airflowIsTotal(behov) || LabelParser.airflowIsTotal(raw);
-        if (total && flow != null && qty > 1) {
-            double split = flow / qty;
-            flow = split == Math.rint(split) ? (double) (int) split : Math.round(split * 10.0) / 10.0;
+        if (flow != null && qty > 1) {
+            flow = sharePerRow(flow, qty);
         }
         boolean exhaust = side != null && ("franluft".equals(side) || "frånluft".equals(side) || "exhaust".equals(side)
                 || side.toLowerCase(java.util.Locale.ROOT).startsWith("fr"));

@@ -22,6 +22,11 @@ public class MultiplierTest {
         assertCopies("12 x EXCA-100 -18", 12, "exhaust", "exca", "100", 18.0);
         assertCopies("15X KSO 160 -22", 15, "exhaust", "kso", "160", 22.0);
         assertCopies("2×EAGLE-125 +27", 2, "supply", "eagle", "125", 27.0);
+        assertCopies("2xEAGLE-125 +54", 2, "supply", "eagle", "125", 54.0);
+        assertCopies("3xKTS-160 +50", 3, "supply", "kts", "160", 50.0);
+        assertEquals(27.0, ProtocolBuilder.sharePerRow(54, 2), 0.01);
+        assertEquals(16.7, ProtocolBuilder.sharePerRow(50, 3), 0.01);
+        assertEquals(50.1, 16.7 * 3, 0.01);
     }
 
     @Test
@@ -56,8 +61,8 @@ public class MultiplierTest {
         assertEquals(2, rows.size());
         assertEquals("E116 Trappa", rows.get(0).room);
         assertEquals("", rows.get(1).room);
-        assertEquals(27.0, rows.get(0).supplyBehov, 0.01);
-        assertEquals(27.0, rows.get(1).supplyBehov, 0.01);
+        assertEquals(13.5, rows.get(0).supplyBehov, 0.01);
+        assertEquals(13.5, rows.get(1).supplyBehov, 0.01);
 
         List<OcrToken> exhaust = TokenCleanup.prepare(Arrays.asList(
                 new OcrToken("KSO", 10, 40, 1, 24, 8),
@@ -102,7 +107,7 @@ public class MultiplierTest {
                 "3x125");
         assertEquals(3, typed.size());
         assertEquals("125", typed.get(0).exhaustSize);
-        assertEquals(20.0, typed.get(1).exhaustBehov, 0.01);
+        assertEquals(6.7, typed.get(1).exhaustBehov, 0.01);
         assertEquals("", typed.get(2).room);
 
         LearnedRules rules = new LearnedRules();
@@ -119,7 +124,7 @@ public class MultiplierTest {
             assertEquals(7, seven.size());
             assertEquals("E1", seven.get(0).room);
             assertEquals("", seven.get(6).room);
-            assertEquals(10.0, seven.get(3).exhaustBehov, 0.01);
+            assertEquals(1.4, seven.get(3).exhaustBehov, 0.01);
 
             Vent totaled = rules.applyVent(new Vent("eagle", "supply", "125", null, 2, 0, 0, "EAGLE", 1));
             List<ProtocolRow> halved = ProtocolBuilder.pair(
@@ -139,13 +144,13 @@ public class MultiplierTest {
         assertEquals("", added.get(7).room);
         assertEquals("EXCA", added.get(4).exhaustName);
         assertEquals("100", added.get(4).exhaustSize);
-        assertEquals(16.0, added.get(4).exhaustBehov, 0.01);
+        assertEquals(2.0, added.get(4).exhaustBehov, 0.01);
         List<ProtocolRow> sized = ProtocolBuilder.rowsFromCorrection(
                 "E21", "KTS", "9x160", "18", "tilluft", "KTS");
         assertEquals(9, sized.size());
         assertEquals("KTS", sized.get(0).supplyName);
         assertEquals("160", sized.get(8).supplySize);
-        assertEquals(18.0, sized.get(0).supplyBehov, 0.01);
+        assertEquals(2.0, sized.get(0).supplyBehov, 0.01);
         assertEquals("", sized.get(1).room);
         List<ProtocolRow> summed = ProtocolBuilder.rowsFromCorrection(
                 "E22", "2x KSO", "125", "30 total", "exhaust", "2x KSO");
@@ -173,14 +178,15 @@ public class MultiplierTest {
             if (i > 0) {
                 assertEquals(label, "", row.room);
             }
+            double share = ProtocolBuilder.sharePerRow(flow, copies);
             if ("supply".equals(kind)) {
                 assertEquals(label, name, row.supplyName);
                 assertEquals(label, size, row.supplySize);
-                assertEquals(label, flow, row.supplyBehov, 0.01);
+                assertEquals(label, share, row.supplyBehov, 0.01);
             } else {
                 assertEquals(label, name, row.exhaustName);
                 assertEquals(label, size, row.exhaustSize);
-                assertEquals(label, flow, row.exhaustBehov, 0.01);
+                assertEquals(label, share, row.exhaustBehov, 0.01);
             }
         }
     }
